@@ -18,11 +18,15 @@ package com.google.turbine.main;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.hash.Hashing;
 import com.google.turbine.binder.Binder;
 import com.google.turbine.binder.Binder.BindingResult;
+import com.google.turbine.binder.ClassPath;
 import com.google.turbine.binder.ClassPathBinder;
+import com.google.turbine.binder.CtSymClassBinder;
+import com.google.turbine.binder.JimageClassBinder;
 import com.google.turbine.deps.Dependencies;
 import com.google.turbine.deps.Transitive;
 import com.google.turbine.diag.SourceFile;
@@ -35,22 +39,35 @@ import com.google.turbine.proto.DepsProto;
 import com.google.turbine.tree.Tree.CompUnit;
 import com.google.turbine.zip.Zip;
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
+import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 
 /** Main entry point for the turbine CLI. */
 public class Main {
 
   private static final int BUFFER_SIZE = 65536;
+
+  // These attributes are used by JavaBuilder, Turbine, and ijar.
+  // They must all be kept in sync.
+  static final String MANIFEST_DIR = "META-INF/";
+  static final String MANIFEST_NAME = JarFile.MANIFEST_NAME;
+  static final Attributes.Name TARGET_LABEL = new Attributes.Name("Target-Label");
+  static final Attributes.Name INJECTING_RULE_KIND = new Attributes.Name("Injecting-Rule-Kind");
 
   public static void main(String[] args) throws IOException {
     compile(args);
@@ -68,29 +85,61 @@ public class Main {
 
     ImmutableList<CompUnit> units = parseAll(options);
 
+    ClassPath bootclasspath = bootclasspath(options);
+
     Collection<String> reducedClasspath =
         Dependencies.reduceClasspath(
-            options.classPath(), options.directJarsToTargets(), options.depsArtifacts());
+            options.classPath(), options.directJars(), options.depsArtifacts());
+    ClassPath classpath = ClassPathBinder.bindClasspath(toPaths(reducedClasspath));
 
     BindingResult bound =
-        Binder.bind(units, toPaths(reducedClasspath), toPaths(options.bootClassPath()));
+        Binder.bind(units, classpath, bootclasspath, /* moduleVersion=*/ Optional.absent());
 
     // TODO(cushon): parallelize
-    Lowered lowered = Lower.lowerAll(bound.units(), bound.classPathEnv());
+    Lowered lowered = Lower.lowerAll(bound.units(), bound.modules(), bound.classPathEnv());
 
-    Map<String, byte[]> transitive = Transitive.collectDeps(options.bootClassPath(), bound);
+    Map<String, byte[]> transitive = Transitive.collectDeps(bootclasspath, bound);
 
     if (options.outputDeps().isPresent()) {
       DepsProto.Dependencies deps =
-          Dependencies.collectDeps(options.targetLabel(), options.bootClassPath(), bound, lowered);
+          Dependencies.collectDeps(options.targetLabel(), bootclasspath, bound, lowered);
       try (OutputStream os =
           new BufferedOutputStream(Files.newOutputStream(Paths.get(options.outputDeps().get())))) {
         deps.writeTo(os);
       }
     }
 
-    writeOutput(Paths.get(options.outputFile()), lowered.bytes(), transitive);
+    writeOutput(options, lowered.bytes(), transitive);
     return true;
+  }
+
+  private static ClassPath bootclasspath(TurbineOptions options) throws IOException {
+    // if both --release and --bootclasspath are specified, --release wins
+    if (options.release().isPresent() && options.system().isPresent()) {
+      throw new IllegalArgumentException("expected at most one of --release and --system");
+    }
+
+    if (options.release().isPresent()) {
+      String release = options.release().get();
+      if (release.equals(System.getProperty("java.specification.version"))) {
+        // if --release matches the host JDK, use its jimage instead of ct.sym
+        return JimageClassBinder.bindDefault();
+      }
+      // ... otherwise, search ct.sym for a matching release
+      ClassPath bootclasspath = CtSymClassBinder.bind(release);
+      if (bootclasspath == null) {
+        throw new IllegalArgumentException("not a supported release: " + release);
+      }
+      return bootclasspath;
+    }
+
+    if (options.system().isPresent()) {
+      // look for a jimage in the given JDK
+      return JimageClassBinder.bind(options.system().get());
+    }
+
+    // the bootclasspath might be empty, e.g. when compiling java.lang
+    return ClassPathBinder.bindClasspath(toPaths(options.bootClassPath()));
   }
 
   /** Parse all source files and source jars. */
@@ -99,20 +148,12 @@ public class Main {
     ImmutableList.Builder<CompUnit> units = ImmutableList.builder();
     for (String source : options.sources()) {
       Path path = Paths.get(source);
-      if (path.getFileName().toString().equals(MODULE_INFO_FILE_NAME)) {
-        continue;
-      }
       units.add(Parser.parse(new SourceFile(source, new String(Files.readAllBytes(path), UTF_8))));
     }
     for (String sourceJar : options.sourceJars()) {
       for (Zip.Entry ze : new Zip.ZipIterable(Paths.get(sourceJar))) {
         if (ze.name().endsWith(".java")) {
           String name = ze.name();
-          int idx = name.lastIndexOf('/');
-          String fileName = idx != -1 ? name.substring(idx + 1) : name;
-          if (fileName.equals(MODULE_INFO_FILE_NAME)) {
-            continue;
-          }
           String source = new String(ze.data(), UTF_8);
           units.add(Parser.parse(new SourceFile(name, source)));
         }
@@ -121,14 +162,11 @@ public class Main {
     return units.build();
   }
 
-  // turbine currently ignores module-info.java files, because they are not needed for header
-  // compilation.
-  // TODO(b/36109466): understand requirements for full Java 9 source support (e.g. module paths)
-  static final String MODULE_INFO_FILE_NAME = "module-info.java";
-
   /** Write bytecode to the output jar. */
   private static void writeOutput(
-      Path path, Map<String, byte[]> lowered, Map<String, byte[]> transitive) throws IOException {
+      TurbineOptions options, Map<String, byte[]> lowered, Map<String, byte[]> transitive)
+      throws IOException {
+    Path path = Paths.get(options.outputFile());
     try (OutputStream os = Files.newOutputStream(path);
         BufferedOutputStream bos = new BufferedOutputStream(os, BUFFER_SIZE);
         JarOutputStream jos = new JarOutputStream(bos)) {
@@ -139,17 +177,48 @@ public class Main {
         addEntry(
             jos, ClassPathBinder.TRANSITIVE_PREFIX + entry.getKey() + ".class", entry.getValue());
       }
+      if (options.targetLabel().isPresent()) {
+        addEntry(jos, MANIFEST_DIR, new byte[] {});
+        addEntry(jos, MANIFEST_NAME, manifestContent(options));
+      }
     }
   }
 
+  /** Normalize timestamps. */
+  static final long DEFAULT_TIMESTAMP =
+      LocalDateTime.of(2010, 1, 1, 0, 0, 0)
+          .atZone(ZoneId.systemDefault())
+          .toInstant()
+          .toEpochMilli();
+
   private static void addEntry(JarOutputStream jos, String name, byte[] bytes) throws IOException {
     JarEntry je = new JarEntry(name);
-    je.setTime(0L); // normalize timestamps to the DOS epoch
+    // TODO(cushon): switch to setLocalTime after we migrate to JDK 9
+    je.setTime(DEFAULT_TIMESTAMP);
     je.setMethod(ZipEntry.STORED);
     je.setSize(bytes.length);
     je.setCrc(Hashing.crc32().hashBytes(bytes).padToLong());
     jos.putNextEntry(je);
     jos.write(bytes);
+  }
+
+  private static byte[] manifestContent(TurbineOptions turbineOptions) throws IOException {
+    Manifest manifest = new Manifest();
+    Attributes attributes = manifest.getMainAttributes();
+    attributes.put(Attributes.Name.MANIFEST_VERSION, "1.0");
+    Attributes.Name createdBy = new Attributes.Name("Created-By");
+    if (attributes.getValue(createdBy) == null) {
+      attributes.put(createdBy, "bazel");
+    }
+    if (turbineOptions.targetLabel().isPresent()) {
+      attributes.put(TARGET_LABEL, turbineOptions.targetLabel().get());
+    }
+    if (turbineOptions.injectingRuleKind().isPresent()) {
+      attributes.put(INJECTING_RULE_KIND, turbineOptions.injectingRuleKind().get());
+    }
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    manifest.write(out);
+    return out.toByteArray();
   }
 
   private static ImmutableList<Path> toPaths(Iterable<String> paths) {
