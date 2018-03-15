@@ -17,19 +17,23 @@
 package com.google.turbine.lower;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.turbine.testing.TestClassPaths.TURBINE_BOOTCLASSPATH;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.stream.Collectors.toCollection;
 import static java.util.stream.Collectors.toList;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.jimfs.Configuration;
 import com.google.common.jimfs.Jimfs;
 import com.google.turbine.binder.Binder;
-import com.google.turbine.bytecode.AsmUtils;
+import com.google.turbine.binder.ClassPath;
+import com.google.turbine.binder.ClassPathBinder;
 import com.google.turbine.diag.SourceFile;
 import com.google.turbine.parse.Parser;
+import com.google.turbine.testing.AsmUtils;
 import com.google.turbine.tree.Tree;
 import com.sun.source.util.JavacTask;
 import com.sun.tools.javac.api.JavacTool;
@@ -400,7 +404,7 @@ public class IntegrationTestSupport {
     final Set<String> classes1 = classes;
     new SignatureReader(signature)
         .accept(
-            new SignatureVisitor(Opcodes.ASM5) {
+            new SignatureVisitor(Opcodes.ASM6) {
               private final Set<String> classes = classes1;
               // class signatures may contain type arguments that contain class signatures
               Deque<List<String>> pieces = new ArrayDeque<>();
@@ -424,8 +428,17 @@ public class IntegrationTestSupport {
             });
   }
 
+  static Map<String, byte[]> runTurbine(Map<String, String> input, ImmutableList<Path> classpath)
+      throws IOException {
+    return runTurbine(
+        input, classpath, TURBINE_BOOTCLASSPATH, /* moduleVersion= */ Optional.absent());
+  }
+
   static Map<String, byte[]> runTurbine(
-      Map<String, String> input, ImmutableList<Path> classpath, Collection<Path> bootclasspath)
+      Map<String, String> input,
+      ImmutableList<Path> classpath,
+      ClassPath bootClassPath,
+      Optional<String> moduleVersion)
       throws IOException {
     List<Tree.CompUnit> units =
         input
@@ -435,14 +448,19 @@ public class IntegrationTestSupport {
             .map(Parser::parse)
             .collect(toList());
 
-    Binder.BindingResult bound = Binder.bind(units, classpath, bootclasspath);
-    return Lower.lowerAll(bound.units(), bound.classPathEnv()).bytes();
+    Binder.BindingResult bound =
+        Binder.bind(units, ClassPathBinder.bindClasspath(classpath), bootClassPath, moduleVersion);
+    return Lower.lowerAll(bound.units(), bound.modules(), bound.classPathEnv()).bytes();
   }
 
   public static Map<String, byte[]> runJavac(
-      Map<String, String> sources,
-      Collection<Path> classpath,
-      Collection<? extends Path> bootclasspath)
+      Map<String, String> sources, Collection<Path> classpath) throws Exception {
+    return runJavac(
+        sources, classpath, ImmutableList.of("-parameters", "-source", "8", "-target", "8"));
+  }
+
+  public static Map<String, byte[]> runJavac(
+      Map<String, String> sources, Collection<Path> classpath, ImmutableList<String> options)
       throws Exception {
 
     FileSystem fs = Jimfs.newFileSystem(Configuration.unix());
@@ -465,16 +483,22 @@ public class IntegrationTestSupport {
     JavacTool compiler = JavacTool.create();
     DiagnosticCollector<JavaFileObject> collector = new DiagnosticCollector<>();
     JavacFileManager fileManager = new JavacFileManager(new Context(), true, UTF_8);
-    fileManager.setLocationFromPaths(StandardLocation.PLATFORM_CLASS_PATH, bootclasspath);
     fileManager.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, ImmutableList.of(out));
     fileManager.setLocationFromPaths(StandardLocation.CLASS_PATH, classpath);
+    fileManager.setLocationFromPaths(StandardLocation.locationFor("MODULE_PATH"), classpath);
+    if (inputs.stream().filter(i -> i.getFileName().toString().equals("module-info.java")).count()
+        > 1) {
+      // multi-module mode
+      fileManager.setLocationFromPaths(
+          StandardLocation.locationFor("MODULE_SOURCE_PATH"), ImmutableList.of(srcs));
+    }
 
     JavacTask task =
         compiler.getTask(
             new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.err, UTF_8)), true),
             fileManager,
             collector,
-            ImmutableList.of("-parameters"),
+            options,
             ImmutableList.of(),
             fileManager.getJavaFileObjectsFromPaths(inputs));
 
