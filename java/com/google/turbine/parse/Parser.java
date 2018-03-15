@@ -17,12 +17,15 @@
 package com.google.turbine.parse;
 
 import static com.google.turbine.parse.Token.COMMA;
+import static com.google.turbine.parse.Token.IDENT;
 import static com.google.turbine.parse.Token.INTERFACE;
 import static com.google.turbine.parse.Token.LPAREN;
 import static com.google.turbine.parse.Token.RPAREN;
+import static com.google.turbine.parse.Token.STATIC;
 import static com.google.turbine.tree.TurbineModifier.PROTECTED;
 import static com.google.turbine.tree.TurbineModifier.PUBLIC;
 
+import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -40,6 +43,13 @@ import com.google.turbine.tree.Tree.Expression;
 import com.google.turbine.tree.Tree.ImportDecl;
 import com.google.turbine.tree.Tree.Kind;
 import com.google.turbine.tree.Tree.MethDecl;
+import com.google.turbine.tree.Tree.ModDecl;
+import com.google.turbine.tree.Tree.ModDirective;
+import com.google.turbine.tree.Tree.ModExports;
+import com.google.turbine.tree.Tree.ModOpens;
+import com.google.turbine.tree.Tree.ModProvides;
+import com.google.turbine.tree.Tree.ModRequires;
+import com.google.turbine.tree.Tree.ModUses;
 import com.google.turbine.tree.Tree.PkgDecl;
 import com.google.turbine.tree.Tree.PrimTy;
 import com.google.turbine.tree.Tree.TyDecl;
@@ -52,6 +62,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.EnumSet;
 import java.util.List;
+import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 
 /**
@@ -85,6 +96,7 @@ public class Parser {
     // and make it bug-compatible with javac:
     // http://mail.openjdk.java.net/pipermail/compiler-dev/2013-August/006968.html
     Optional<PkgDecl> pkg = Optional.absent();
+    Optional<ModDecl> mod = Optional.absent();
     EnumSet<TurbineModifier> access = EnumSet.noneOf(TurbineModifier.class);
     ImmutableList.Builder<ImportDecl> imports = ImmutableList.builder();
     ImmutableList.Builder<TyDecl> decls = ImmutableList.builder();
@@ -165,11 +177,30 @@ public class Parser {
           break;
         case EOF:
           // TODO(cushon): check for dangling modifiers?
-          return new CompUnit(position, pkg, imports.build(), decls.build(), lexer.source());
+          return new CompUnit(position, pkg, mod, imports.build(), decls.build(), lexer.source());
         case SEMI:
           // TODO(cushon): check for dangling modifiers?
           next();
           continue;
+        case IDENT:
+          {
+            String ident = lexer.stringValue();
+            if (access.isEmpty() && (ident.equals("module") || ident.equals("open"))) {
+              boolean open = false;
+              if (ident.equals("open")) {
+                ident = eatIdent();
+                open = true;
+              }
+              if (!ident.equals("module")) {
+                throw error(token);
+              }
+              next();
+              mod = Optional.of(moduleDeclaration(open, annos.build()));
+              annos = ImmutableList.builder();
+              break;
+            }
+          }
+          // fall through
         default:
           throw error(token);
       }
@@ -183,6 +214,7 @@ public class Parser {
 
   private TyDecl interfaceDeclaration(EnumSet<TurbineModifier> access, ImmutableList<Anno> annos) {
     eat(Token.INTERFACE);
+    int pos = position;
     String name = eatIdent();
     ImmutableList<TyParam> typarams;
     if (token == Token.LT) {
@@ -201,7 +233,7 @@ public class Parser {
     ImmutableList<Tree> members = classMembers();
     eat(Token.RBRACE);
     return new TyDecl(
-        position,
+        pos,
         access,
         annos,
         name,
@@ -214,12 +246,13 @@ public class Parser {
 
   private TyDecl annotationDeclaration(EnumSet<TurbineModifier> access, ImmutableList<Anno> annos) {
     eat(Token.INTERFACE);
+    int pos = position;
     String name = eatIdent();
     eat(Token.LBRACE);
     ImmutableList<Tree> members = classMembers();
     eat(Token.RBRACE);
     return new TyDecl(
-        position,
+        pos,
         access,
         annos,
         name,
@@ -232,6 +265,7 @@ public class Parser {
 
   private TyDecl enumDeclaration(EnumSet<TurbineModifier> access, ImmutableList<Anno> annos) {
     eat(Token.ENUM);
+    int pos = position;
     String name = eatIdent();
     ImmutableList.Builder<ClassTy> interfaces = ImmutableList.builder();
     if (token == Token.IMPLEMENTS) {
@@ -245,7 +279,7 @@ public class Parser {
         ImmutableList.<Tree>builder().addAll(enumMembers(name)).addAll(classMembers()).build();
     eat(Token.RBRACE);
     return new TyDecl(
-        position,
+        pos,
         access,
         annos,
         name,
@@ -254,6 +288,129 @@ public class Parser {
         interfaces.build(),
         members,
         TurbineTyKind.ENUM);
+  }
+
+  private String moduleName() {
+    return Joiner.on('.').join(qualIdent());
+  }
+
+  private String packageName() {
+    return Joiner.on('/').join(qualIdent());
+  }
+
+  private ModDecl moduleDeclaration(boolean open, ImmutableList<Anno> annos) {
+    int pos = position;
+    String moduleName = moduleName();
+    eat(Token.LBRACE);
+    ImmutableList.Builder<ModDirective> directives = ImmutableList.builder();
+    OUTER:
+    while (true) {
+      switch (token) {
+        case IDENT:
+          {
+            String ident = lexer.stringValue();
+            next();
+            switch (ident) {
+              case "requires":
+                directives.add(moduleRequires());
+                break;
+              case "exports":
+                directives.add(moduleExports());
+                break;
+              case "opens":
+                directives.add(moduleOpens());
+                break;
+              case "uses":
+                directives.add(moduleUses());
+                break;
+              case "provides":
+                directives.add(moduleProvides());
+                break;
+              default: // fall out
+            }
+            break;
+          }
+        case RBRACE:
+          break OUTER;
+        default:
+          throw error(token);
+      }
+    }
+    eat(Token.RBRACE);
+    return new ModDecl(pos, annos, open, moduleName, directives.build());
+  }
+
+  private ModRequires moduleRequires() {
+    int pos = position;
+    EnumSet<TurbineModifier> access = EnumSet.noneOf(TurbineModifier.class);
+    while (true) {
+      if (token == Token.IDENT && lexer.stringValue().equals("transitive")) {
+        next();
+        access.add(TurbineModifier.TRANSITIVE);
+        break;
+      }
+      if (token == Token.STATIC) {
+        next();
+        access.add(TurbineModifier.STATIC);
+        break;
+      }
+      break;
+    }
+    String moduleName = moduleName();
+    eat(Token.SEMI);
+    return new ModRequires(pos, ImmutableSet.copyOf(access), moduleName);
+  }
+
+  private ModExports moduleExports() {
+    int pos = position;
+    String packageName = packageName();
+    ImmutableList.Builder<String> moduleNames = ImmutableList.builder();
+    if (lexer.stringValue().equals("to")) {
+      next();
+      do {
+        String moduleName = moduleName();
+        moduleNames.add(moduleName);
+      } while (maybe(Token.COMMA));
+    }
+    eat(Token.SEMI);
+    return new ModExports(pos, packageName, moduleNames.build());
+  }
+
+  private ModOpens moduleOpens() {
+    int pos = position;
+    String packageName = packageName();
+    ImmutableList.Builder<String> moduleNames = ImmutableList.builder();
+    if (lexer.stringValue().equals("to")) {
+      next();
+      do {
+        String moduleName = moduleName();
+        moduleNames.add(moduleName);
+      } while (maybe(Token.COMMA));
+    }
+    eat(Token.SEMI);
+    return new ModOpens(pos, packageName, moduleNames.build());
+  }
+
+  private ModUses moduleUses() {
+    int pos = position;
+    ImmutableList<String> uses = qualIdent();
+    eat(Token.SEMI);
+    return new ModUses(pos, uses);
+  }
+
+  private ModProvides moduleProvides() {
+    int pos = position;
+    ImmutableList<String> typeName = qualIdent();
+    if (!eatIdent().equals("with")) {
+      throw error(token);
+    }
+    ImmutableList.Builder<ImmutableList<String>> implNames = ImmutableList.builder();
+    do {
+      ImmutableList<String> implName = qualIdent();
+      implNames.add(implName);
+    } while (maybe(Token.COMMA));
+    eat(Token.SEMI);
+    return new ModProvides(pos, typeName, implNames.build());
   }
 
   private static final ImmutableSet<TurbineModifier> ENUM_CONSTANT_MODIFIERS =
@@ -316,6 +473,7 @@ public class Parser {
 
   private TyDecl classDeclaration(EnumSet<TurbineModifier> access, ImmutableList<Anno> annos) {
     eat(Token.CLASS);
+    int pos = position;
     String name = eatIdent();
     ImmutableList<TyParam> tyParams = ImmutableList.of();
     if (token == Token.LT) {
@@ -337,7 +495,7 @@ public class Parser {
     ImmutableList<Tree> members = classMembers();
     eat(Token.RBRACE);
     return new TyDecl(
-        position,
+        pos,
         access,
         annos,
         name,
@@ -1177,6 +1335,7 @@ public class Parser {
     return false;
   }
 
+  @CheckReturnValue
   TurbineError error(Token token) {
     switch (token) {
       case IDENT:
@@ -1188,6 +1347,7 @@ public class Parser {
     }
   }
 
+  @CheckReturnValue
   private TurbineError error(ErrorKind kind, Object... args) {
     return TurbineError.format(
         lexer.source(),
