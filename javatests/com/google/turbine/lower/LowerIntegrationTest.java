@@ -299,6 +299,9 @@ public class LowerIntegrationTest {
       "type_anno_cstyle_array_dims.test",
       "packagedecl.test",
       "static_member_type_import_recursive.test",
+      "B70953542.test",
+      // TODO(cushon): support for source level 9 in integration tests
+      // "B74332665.test",
     };
     List<Object[]> tests =
         ImmutableList.copyOf(testCases).stream().map(x -> new Object[] {x}).collect(toList());
@@ -326,9 +329,6 @@ public class LowerIntegrationTest {
     this.test = test;
   }
 
-  static final ImmutableList<Path> BOOTCLASSPATH =
-      ImmutableList.of(Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar"));
-
   @Rule public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
   @Test
@@ -343,7 +343,7 @@ public class LowerIntegrationTest {
     ImmutableList<Path> classpathJar = ImmutableList.of();
     if (!input.classes.isEmpty()) {
       Map<String, byte[]> classpath =
-          IntegrationTestSupport.runJavac(input.classes, ImmutableList.of(), BOOTCLASSPATH);
+          IntegrationTestSupport.runJavac(input.classes, ImmutableList.of());
       Path lib = temporaryFolder.newFile("lib.jar").toPath();
       try (JarOutputStream jos = new JarOutputStream(Files.newOutputStream(lib))) {
         for (Map.Entry<String, byte[]> entry : classpath.entrySet()) {
@@ -354,11 +354,9 @@ public class LowerIntegrationTest {
       classpathJar = ImmutableList.of(lib);
     }
 
-    Map<String, byte[]> expected =
-        IntegrationTestSupport.runJavac(input.sources, classpathJar, BOOTCLASSPATH);
+    Map<String, byte[]> expected = IntegrationTestSupport.runJavac(input.sources, classpathJar);
 
-    Map<String, byte[]> actual =
-        IntegrationTestSupport.runTurbine(input.sources, classpathJar, BOOTCLASSPATH);
+    Map<String, byte[]> actual = IntegrationTestSupport.runTurbine(input.sources, classpathJar);
 
     assertThat(IntegrationTestSupport.dump(IntegrationTestSupport.sortMembers(actual)))
         .isEqualTo(IntegrationTestSupport.dump(IntegrationTestSupport.canonicalize(expected)));

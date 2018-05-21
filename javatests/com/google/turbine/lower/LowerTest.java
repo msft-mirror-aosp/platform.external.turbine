@@ -17,9 +17,11 @@
 package com.google.turbine.lower;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.turbine.testing.TestClassPaths.TURBINE_BOOTCLASSPATH;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
@@ -27,27 +29,23 @@ import com.google.turbine.binder.Binder;
 import com.google.turbine.binder.Binder.BindingResult;
 import com.google.turbine.binder.ClassPathBinder;
 import com.google.turbine.binder.bound.SourceTypeBoundClass;
-import com.google.turbine.binder.bytecode.BytecodeBoundClass;
-import com.google.turbine.binder.env.CompoundEnv;
 import com.google.turbine.binder.env.SimpleEnv;
-import com.google.turbine.binder.lookup.TopLevelIndex;
 import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.binder.sym.FieldSymbol;
 import com.google.turbine.binder.sym.MethodSymbol;
 import com.google.turbine.binder.sym.TyVarSymbol;
-import com.google.turbine.bytecode.AsmUtils;
 import com.google.turbine.bytecode.ByteReader;
 import com.google.turbine.bytecode.ConstantPoolReader;
 import com.google.turbine.model.TurbineConstantTypeKind;
 import com.google.turbine.model.TurbineFlag;
 import com.google.turbine.model.TurbineTyKind;
 import com.google.turbine.parse.Parser;
+import com.google.turbine.testing.AsmUtils;
 import com.google.turbine.type.Type;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -72,13 +70,8 @@ public class LowerTest {
 
   @Rule public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
-  private static final ImmutableList<Path> BOOTCLASSPATH =
-      ImmutableList.of(Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar"));
-
   @Test
   public void hello() throws Exception {
-    CompoundEnv<ClassSymbol, BytecodeBoundClass> classpath =
-        ClassPathBinder.bind(ImmutableList.of(), BOOTCLASSPATH, TopLevelIndex.builder());
 
     ImmutableList<Type.ClassTy> interfaceTypes =
         ImmutableList.of(
@@ -219,7 +212,8 @@ public class LowerTest {
         Lower.lowerAll(
                 ImmutableMap.of(
                     new ClassSymbol("test/Test"), c, new ClassSymbol("test/Test$Inner"), i),
-                classpath)
+                ImmutableList.of(),
+                TURBINE_BOOTCLASSPATH.env())
             .bytes();
 
     assertThat(AsmUtils.textify(bytes.get("test/Test")))
@@ -249,13 +243,15 @@ public class LowerTest {
                             "    class InnerMost {}",
                             "  }",
                             "}"))),
-            ImmutableList.of(),
-            BOOTCLASSPATH);
-    Map<String, byte[]> lowered = Lower.lowerAll(bound.units(), bound.classPathEnv()).bytes();
+            ClassPathBinder.bindClasspath(ImmutableList.of()),
+            TURBINE_BOOTCLASSPATH,
+            /* moduleVersion=*/ Optional.absent());
+    Map<String, byte[]> lowered =
+        Lower.lowerAll(bound.units(), bound.modules(), bound.classPathEnv()).bytes();
     List<String> attributes = new ArrayList<>();
     new ClassReader(lowered.get("Test$Inner$InnerMost"))
         .accept(
-            new ClassVisitor(Opcodes.ASM5) {
+            new ClassVisitor(Opcodes.ASM6) {
               @Override
               public void visitInnerClass(
                   String name, String outerName, String innerName, int access) {
@@ -278,7 +274,7 @@ public class LowerTest {
                 UTF_8));
 
     Map<String, byte[]> actual =
-        IntegrationTestSupport.runTurbine(input.sources, ImmutableList.of(), BOOTCLASSPATH);
+        IntegrationTestSupport.runTurbine(input.sources, ImmutableList.of());
 
     ByteReader reader = new ByteReader(actual.get("Test"), 0);
     assertThat(reader.u4()).isEqualTo(0xcafebabe); // magic
@@ -325,17 +321,19 @@ public class LowerTest {
                             "class Test {",
                             "  public @Anno int[][] xs;",
                             "}"))),
-            ImmutableList.of(),
-            BOOTCLASSPATH);
-    Map<String, byte[]> lowered = Lower.lowerAll(bound.units(), bound.classPathEnv()).bytes();
+            ClassPathBinder.bindClasspath(ImmutableList.of()),
+            TURBINE_BOOTCLASSPATH,
+            /* moduleVersion=*/ Optional.absent());
+    Map<String, byte[]> lowered =
+        Lower.lowerAll(bound.units(), bound.modules(), bound.classPathEnv()).bytes();
     TypePath[] path = new TypePath[1];
     new ClassReader(lowered.get("Test"))
         .accept(
-            new ClassVisitor(Opcodes.ASM5) {
+            new ClassVisitor(Opcodes.ASM6) {
               @Override
               public FieldVisitor visitField(
                   int access, String name, String desc, String signature, Object value) {
-                return new FieldVisitor(Opcodes.ASM5) {
+                return new FieldVisitor(Opcodes.ASM6) {
                   @Override
                   public AnnotationVisitor visitTypeAnnotation(
                       int typeRef, TypePath typePath, String desc, boolean visible) {
@@ -377,13 +375,12 @@ public class LowerTest {
                     "  static final boolean ZCONST = Lib.ZCONST || false;",
                     "}"));
 
-    Map<String, byte[]> actual =
-        IntegrationTestSupport.runTurbine(input, ImmutableList.of(lib), BOOTCLASSPATH);
+    Map<String, byte[]> actual = IntegrationTestSupport.runTurbine(input, ImmutableList.of(lib));
 
     Map<String, Object> values = new LinkedHashMap<>();
     new ClassReader(actual.get("Test"))
         .accept(
-            new ClassVisitor(Opcodes.ASM5) {
+            new ClassVisitor(Opcodes.ASM6) {
               @Override
               public FieldVisitor visitField(
                   int access, String name, String desc, String signature, Object value) {
@@ -402,13 +399,15 @@ public class LowerTest {
     BindingResult bound =
         Binder.bind(
             ImmutableList.of(Parser.parse("@Deprecated class Test {}")),
-            ImmutableList.of(),
-            BOOTCLASSPATH);
-    Map<String, byte[]> lowered = Lower.lowerAll(bound.units(), bound.classPathEnv()).bytes();
+            ClassPathBinder.bindClasspath(ImmutableList.of()),
+            TURBINE_BOOTCLASSPATH,
+            /* moduleVersion=*/ Optional.absent());
+    Map<String, byte[]> lowered =
+        Lower.lowerAll(bound.units(), bound.modules(), bound.classPathEnv()).bytes();
     int[] acc = {0};
     new ClassReader(lowered.get("Test"))
         .accept(
-            new ClassVisitor(Opcodes.ASM5) {
+            new ClassVisitor(Opcodes.ASM6) {
               @Override
               public void visit(
                   int version,
@@ -475,10 +474,8 @@ public class LowerTest {
       noImports = builder.build();
     }
 
-    Map<String, byte[]> expected =
-        IntegrationTestSupport.runJavac(noImports, ImmutableList.of(), BOOTCLASSPATH);
-    Map<String, byte[]> actual =
-        IntegrationTestSupport.runTurbine(sources, ImmutableList.of(), BOOTCLASSPATH);
+    Map<String, byte[]> expected = IntegrationTestSupport.runJavac(noImports, ImmutableList.of());
+    Map<String, byte[]> actual = IntegrationTestSupport.runTurbine(sources, ImmutableList.of());
     assertThat(IntegrationTestSupport.dump(IntegrationTestSupport.sortMembers(actual)))
         .isEqualTo(IntegrationTestSupport.dump(IntegrationTestSupport.canonicalize(expected)));
   }
