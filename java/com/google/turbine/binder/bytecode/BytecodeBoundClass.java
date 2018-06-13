@@ -53,7 +53,7 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.RetentionPolicy;
 import java.util.Map;
 import java.util.function.Function;
-import javax.annotation.Nullable;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * A bound class backed by a class file.
@@ -83,7 +83,7 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
             new Supplier<ClassFile>() {
               @Override
               public ClassFile get() {
-                ClassFile cf = ClassReader.read(jarFile + "!" + sym, bytes.get());
+                ClassFile cf = ClassReader.read(jarFile + "!" + sym.binaryName(), bytes.get());
                 verify(
                     cf.name().equals(sym.binaryName()),
                     "expected class data for %s, saw %s instead",

@@ -199,16 +199,22 @@ public strictfp class ConstEvaluator {
     }
     LookupResult result = scope.lookup(new LookupKey(flat));
     if (result == null) {
-      throw error(classTy.position(), ErrorKind.SYMBOL_NOT_FOUND, flat.peekFirst());
+      throw error(classTy.position(), ErrorKind.CANNOT_RESOLVE, flat.peekFirst());
     }
     ClassSymbol classSym = (ClassSymbol) result.sym();
     for (String bit : result.remaining()) {
-      classSym = Resolve.resolve(env, origin, classSym, bit);
-      if (classSym == null) {
-        throw error(classTy.position(), ErrorKind.SYMBOL_NOT_FOUND, bit);
-      }
+      classSym = resolveNext(classTy.position(), classSym, bit);
     }
     return classSym;
+  }
+
+  private ClassSymbol resolveNext(int position, ClassSymbol sym, String bit) {
+    ClassSymbol next = Resolve.resolve(env, origin, sym, bit);
+    if (next == null) {
+      throw error(
+          position, ErrorKind.SYMBOL_NOT_FOUND, new ClassSymbol(sym.binaryName() + '$' + bit));
+    }
+    return next;
   }
 
   /** Evaluates a reference to another constant variable. */
@@ -256,7 +262,10 @@ public strictfp class ConstEvaluator {
       }
       return field;
     }
-    return null;
+    throw error(
+        t.position(),
+        ErrorKind.CANNOT_RESOLVE,
+        String.format("field %s", Iterables.getLast(t.name())));
   }
 
   private FieldInfo resolveQualifiedField(ConstVarName t) {
@@ -265,6 +274,10 @@ public strictfp class ConstEvaluator {
     }
     LookupResult result = scope.lookup(new LookupKey(t.name()));
     if (result == null) {
+      return null;
+    }
+    if (result.remaining().isEmpty()) {
+      // unexpectedly resolved qualified name to a type
       return null;
     }
     ClassSymbol sym = (ClassSymbol) result.sym();
@@ -984,7 +997,12 @@ public strictfp class ConstEvaluator {
   }
 
   public Const.Value evalFieldInitializer(Expression expression, Type type) {
-    Const value = eval(expression);
+    Const value;
+    try {
+      value = eval(expression);
+    } catch (TurbineError error) {
+      return null;
+    }
     if (value == null || value.kind() != Const.Kind.PRIMITIVE) {
       return null;
     }
