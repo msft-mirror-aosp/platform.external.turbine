@@ -19,7 +19,7 @@ package com.google.turbine.binder.bound;
 import com.google.common.collect.ImmutableList;
 import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.type.AnnoInfo;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import javax.annotation.Nullable;
 
 /** A bound module declaration (see JLS §7.7). */
 public class ModuleInfo {
