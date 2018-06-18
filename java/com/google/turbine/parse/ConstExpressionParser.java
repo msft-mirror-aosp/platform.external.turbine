@@ -20,6 +20,7 @@ import static com.google.common.collect.Iterables.getOnlyElement;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
+import com.google.errorprone.annotations.CheckReturnValue;
 import com.google.turbine.diag.TurbineError;
 import com.google.turbine.diag.TurbineError.ErrorKind;
 import com.google.turbine.model.Const;
@@ -29,8 +30,7 @@ import com.google.turbine.tree.Tree.ClassLiteral;
 import com.google.turbine.tree.Tree.ClassTy;
 import com.google.turbine.tree.Tree.Expression;
 import com.google.turbine.tree.TurbineOperatorKind;
-import javax.annotation.CheckReturnValue;
-import javax.annotation.Nullable;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** A parser for compile-time constant expressions. */
 public class ConstExpressionParser {
@@ -220,7 +220,8 @@ public class ConstExpressionParser {
         case NOT:
         case TILDE:
         case IDENT:
-          return new Tree.TypeCast(position, asClassTy(cvar.name()), primary(false));
+          return new Tree.TypeCast(
+              position, asClassTy(cvar.position(), cvar.name()), primary(false));
         default:
           return expr;
       }
@@ -229,12 +230,11 @@ public class ConstExpressionParser {
     }
   }
 
-  private ClassTy asClassTy(ImmutableList<String> names) {
+  private static ClassTy asClassTy(int pos, ImmutableList<String> names) {
     ClassTy cty = null;
     for (String bit : names) {
       cty =
-          new ClassTy(
-              position, Optional.fromNullable(cty), bit, ImmutableList.of(), ImmutableList.of());
+          new ClassTy(pos, Optional.fromNullable(cty), bit, ImmutableList.of(), ImmutableList.of());
     }
     return cty;
   }
@@ -419,14 +419,13 @@ public class ConstExpressionParser {
     return new Tree.Unary(position, expr, op);
   }
 
-  @Nullable
-  private Tree.Expression qualIdent() {
+  private Tree.@Nullable Expression qualIdent() {
     int pos = position;
     ImmutableList.Builder<String> bits = ImmutableList.builder();
     bits.add(lexer.stringValue());
     eat();
     if (token == Token.LBRACK) {
-      return finishClassLiteral(pos, asClassTy(bits.build()));
+      return finishClassLiteral(pos, asClassTy(pos, bits.build()));
     }
     while (token == Token.DOT) {
       eat();
@@ -437,7 +436,7 @@ public class ConstExpressionParser {
         case CLASS:
           // TODO(cushon): only allow in annotations?
           eat();
-          return new Tree.ClassLiteral(pos, asClassTy(bits.build()));
+          return new Tree.ClassLiteral(pos, asClassTy(pos, bits.build()));
         default:
           return null;
       }

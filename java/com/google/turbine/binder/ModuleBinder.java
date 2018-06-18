@@ -29,6 +29,7 @@ import com.google.turbine.binder.bound.ModuleInfo.ProvideInfo;
 import com.google.turbine.binder.bound.ModuleInfo.RequireInfo;
 import com.google.turbine.binder.bound.ModuleInfo.UseInfo;
 import com.google.turbine.binder.bound.PackageSourceBoundModule;
+import com.google.turbine.binder.bound.SourceModuleInfo;
 import com.google.turbine.binder.bound.TypeBoundClass;
 import com.google.turbine.binder.env.CompoundEnv;
 import com.google.turbine.binder.env.Env;
@@ -54,7 +55,7 @@ import com.google.turbine.type.AnnoInfo;
 /** Binding pass for modules. */
 public class ModuleBinder {
 
-  public static ModuleInfo bind(
+  public static SourceModuleInfo bind(
       PackageSourceBoundModule module,
       CompoundEnv<ClassSymbol, TypeBoundClass> env,
       Env<ModuleSymbol, ModuleInfo> moduleEnv,
@@ -80,7 +81,7 @@ public class ModuleBinder {
     this.scope = module.scope().toScope(Resolve.resolveFunction(env, /* origin= */ null));
   }
 
-  private ModuleInfo bind() {
+  private SourceModuleInfo bind() {
     // bind annotations; constant fields are already bound
     ConstEvaluator constEvaluator =
         new ConstEvaluator(
@@ -146,7 +147,7 @@ public class ModuleBinder {
               .addAll(requires.build());
     }
 
-    return new ModuleInfo(
+    return new SourceModuleInfo(
         module.module().moduleName(),
         moduleVersion.orNull(),
         flags,
@@ -155,7 +156,8 @@ public class ModuleBinder {
         exports.build(),
         opens.build(),
         uses.build(),
-        provides.build());
+        provides.build(),
+        module.source());
   }
 
   private RequireInfo bindRequires(ModRequires directive) {
@@ -204,13 +206,15 @@ public class ModuleBinder {
     LookupKey key = new LookupKey(simpleNames);
     LookupResult result = scope.lookup(key);
     if (result == null) {
-      throw error(ErrorKind.SYMBOL_NOT_FOUND, pos, Joiner.on('.').join(simpleNames));
+      throw error(
+          ErrorKind.SYMBOL_NOT_FOUND, pos, new ClassSymbol(Joiner.on('/').join(simpleNames)));
     }
     ClassSymbol sym = (ClassSymbol) result.sym();
     for (String name : result.remaining()) {
       sym = Resolve.resolve(env, /* origin= */ null, sym, name);
       if (sym == null) {
-        throw error(ErrorKind.SYMBOL_NOT_FOUND, pos, name);
+        throw error(
+            ErrorKind.SYMBOL_NOT_FOUND, pos, new ClassSymbol(sym.binaryName() + '$' + name));
       }
     }
     return sym;
