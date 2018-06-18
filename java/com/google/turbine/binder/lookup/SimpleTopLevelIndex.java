@@ -23,7 +23,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
-import javax.annotation.Nullable;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * An index of canonical type names where all members are known statically.
@@ -85,7 +85,7 @@ public class SimpleTopLevelIndex implements TopLevelIndex {
 
     /** Inserts a {@link ClassSymbol} into the index, creating any needed packages. */
     public boolean insert(ClassSymbol sym) {
-      Iterator<String> it = Splitter.on('/').split(sym.toString()).iterator();
+      Iterator<String> it = Splitter.on('/').split(sym.binaryName()).iterator();
       Node curr = root;
       while (it.hasNext()) {
         String simpleName = it.next();
