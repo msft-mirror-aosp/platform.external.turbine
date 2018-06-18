@@ -16,7 +16,7 @@
 
 package com.google.turbine.binder.lookup;
 
-import org.checkerframework.checker.nullness.qual.Nullable;
+import javax.annotation.Nullable;
 
 /** A scope that defines types, and supports qualified name resolution. */
 public interface Scope {

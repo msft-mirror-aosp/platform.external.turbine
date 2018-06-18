@@ -18,7 +18,6 @@ package com.google.turbine.bytecode;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.errorprone.annotations.CheckReturnValue;
 import com.google.turbine.bytecode.ClassFile.AnnotationInfo.ElementValue;
 import com.google.turbine.bytecode.ClassFile.AnnotationInfo.ElementValue.ConstClassValue;
 import com.google.turbine.bytecode.ClassFile.AnnotationInfo.ElementValue.EnumConstValue;
@@ -33,7 +32,8 @@ import com.google.turbine.model.TurbineFlag;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import javax.annotation.CheckReturnValue;
+import javax.annotation.Nullable;
 
 /** A JVMS §4 class file reader. */
 public class ClassReader {

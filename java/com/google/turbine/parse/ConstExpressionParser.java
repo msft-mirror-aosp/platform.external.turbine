@@ -20,7 +20,6 @@ import static com.google.common.collect.Iterables.getOnlyElement;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
-import com.google.errorprone.annotations.CheckReturnValue;
 import com.google.turbine.diag.TurbineError;
 import com.google.turbine.diag.TurbineError.ErrorKind;
 import com.google.turbine.model.Const;
@@ -30,7 +29,8 @@ import com.google.turbine.tree.Tree.ClassLiteral;
 import com.google.turbine.tree.Tree.ClassTy;
 import com.google.turbine.tree.Tree.Expression;
 import com.google.turbine.tree.TurbineOperatorKind;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import javax.annotation.CheckReturnValue;
+import javax.annotation.Nullable;
 
 /** A parser for compile-time constant expressions. */
 public class ConstExpressionParser {
@@ -419,7 +419,8 @@ public class ConstExpressionParser {
     return new Tree.Unary(position, expr, op);
   }
 
-  private Tree.@Nullable Expression qualIdent() {
+  @Nullable
+  private Tree.Expression qualIdent() {
     int pos = position;
     ImmutableList.Builder<String> bits = ImmutableList.builder();
     bits.add(lexer.stringValue());
