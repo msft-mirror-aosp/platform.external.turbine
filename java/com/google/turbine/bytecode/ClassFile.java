@@ -26,7 +26,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import javax.annotation.Nullable;
 
 /** A JVMS §4.1 ClassFile. */
 public class ClassFile {
@@ -131,7 +131,7 @@ public class ClassFile {
     private final String name;
     private final String descriptor;
     @Nullable private final String signature;
-    private final Const.@Nullable Value value;
+    @Nullable private final Const.Value value;
     private final List<AnnotationInfo> annotations;
     private final ImmutableList<TypeAnnotationInfo> typeAnnotations;
 
@@ -174,7 +174,8 @@ public class ClassFile {
     }
 
     /** The compile-time constant value. */
-    public Const.@Nullable Value value() {
+    @Nullable
+    public Const.Value value() {
       return value;
     }
 
@@ -233,7 +234,7 @@ public class ClassFile {
     private final String descriptor;
     @Nullable private final String signature;
     private final List<String> exceptions;
-    private final AnnotationInfo.@Nullable ElementValue defaultValue;
+    @Nullable private final AnnotationInfo.ElementValue defaultValue;
     private final List<AnnotationInfo> annotations;
     private final ImmutableList<ImmutableList<AnnotationInfo>> parameterAnnotations;
     private final ImmutableList<TypeAnnotationInfo> typeAnnotations;
@@ -289,7 +290,8 @@ public class ClassFile {
     }
 
     /** The value of the AnnotationDefault attribute. */
-    public AnnotationInfo.@Nullable ElementValue defaultValue() {
+    @Nullable
+    public AnnotationInfo.ElementValue defaultValue() {
       return defaultValue;
     }
 
