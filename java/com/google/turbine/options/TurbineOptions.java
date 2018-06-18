@@ -21,7 +21,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import javax.annotation.Nullable;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Header compilation options. */
 public class TurbineOptions {
@@ -268,12 +268,6 @@ public class TurbineOptions {
 
     public Builder setOutputDeps(String outputDeps) {
       this.outputDeps = outputDeps;
-      return this;
-    }
-
-    // TODO(b/72379900): Remove this
-    public Builder addDirectJarToTarget(String jar) {
-      directJars.add(jar);
       return this;
     }
 
