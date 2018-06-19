@@ -27,11 +27,7 @@ import com.google.turbine.binder.env.Env;
 import com.google.turbine.binder.env.LazyEnv.LazyBindingError;
 import com.google.turbine.binder.lookup.CanonicalSymbolResolver;
 import com.google.turbine.binder.lookup.ImportScope.ResolveFunction;
-import com.google.turbine.binder.lookup.LookupResult;
 import com.google.turbine.binder.sym.ClassSymbol;
-import com.google.turbine.diag.SourceFile;
-import com.google.turbine.diag.TurbineError;
-import com.google.turbine.diag.TurbineError.ErrorKind;
 import com.google.turbine.model.TurbineVisibility;
 import java.util.Objects;
 
@@ -101,18 +97,6 @@ public class Resolve {
         ImmutableList<String> packagename, CompoundEnv<ClassSymbol, BoundClass> env) {
       this.packagename = Joiner.on('/').join(packagename);
       this.env = env;
-    }
-
-    @Override
-    public ClassSymbol resolve(SourceFile source, int position, LookupResult result) {
-      ClassSymbol sym = (ClassSymbol) result.sym();
-      for (String bit : result.remaining()) {
-        sym = resolveOne(sym, bit);
-        if (sym == null) {
-          throw TurbineError.format(source, position, ErrorKind.SYMBOL_NOT_FOUND, bit);
-        }
-      }
-      return sym;
     }
 
     @Override
