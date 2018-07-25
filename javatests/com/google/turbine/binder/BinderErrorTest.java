@@ -46,7 +46,7 @@ public class BinderErrorTest {
           "}",
         },
         {
-          "<>:2: error: symbol not found NoSuch",
+          "<>:2: error: could not resolve NoSuch",
           "public class A extends NoSuch {",
           "                       ^",
         }
@@ -61,7 +61,7 @@ public class BinderErrorTest {
         },
         // TODO(cushon): we'd prefer the caret at NoSuch instead of A
         {
-          "<>:4: error: symbol not found NoSuch", //
+          "<>:4: error: symbol not found a.A$NoSuch", //
           "class B extends A.NoSuch {",
           "                ^",
         }
@@ -73,7 +73,7 @@ public class BinderErrorTest {
           "class B extends A<NoSuch> {}",
         },
         {
-          "<>:3: error: symbol not found NoSuch",
+          "<>:3: error: could not resolve NoSuch",
           "class B extends A<NoSuch> {}",
           "                  ^",
         }
@@ -84,7 +84,7 @@ public class BinderErrorTest {
           "@Anno(foo=100, bar=200) class Test {}",
         },
         {
-          "<>:2: error: cannot resolve foo", //
+          "<>:2: error: could not resolve foo", //
           "@Anno(foo=100, bar=200) class Test {}",
           "      ^",
         },
@@ -95,7 +95,7 @@ public class BinderErrorTest {
           "@Anno(foo=100, bar=200) class Test {}",
         },
         {
-          "<>:2: error: cannot resolve bar", //
+          "<>:2: error: could not resolve bar", //
           "@Anno(foo=100, bar=200) class Test {}",
           "               ^",
         },
@@ -146,8 +146,8 @@ public class BinderErrorTest {
           "}",
         },
         {
-          "<>:4: error: cycle in class hierarchy: p/OuterExtendsInner$Inner"
-              + " -> p/OuterExtendsInner$Inner",
+          "<>:4: error: cycle in class hierarchy: p.OuterExtendsInner$Inner"
+              + " -> p.OuterExtendsInner$Inner",
           "  public static class Inner extends Foo {}",
           "                                    ^"
         },
@@ -173,7 +173,7 @@ public class BinderErrorTest {
           "}",
         },
         {
-          "<>:2: error: symbol not found NoSuch", //
+          "<>:2: error: symbol not found java.util.List$NoSuch", //
           "import java.util.List.NoSuch;",
           "       ^"
         },
@@ -186,9 +186,9 @@ public class BinderErrorTest {
           "}",
         },
         {
-          "<>:2: error: symbol not found NoSuch", //
-          "import static java.util.List.NoSuch;",
-          "              ^"
+          "<>:3: error: could not resolve NoSuch", //
+          "public class Test extends NoSuch {",
+          "                          ^"
         },
       },
       {
@@ -199,7 +199,7 @@ public class BinderErrorTest {
           "}",
         },
         {
-          "<>:3: error: symbol not found NoSuchOther",
+          "<>:3: error: could not resolve NoSuchOther",
           "public class Test extends NoSuchOther {",
           "                          ^",
         },
@@ -212,7 +212,7 @@ public class BinderErrorTest {
           "}",
         },
         {
-          "<>:3: error: symbol not found NoSuchOther",
+          "<>:3: error: could not resolve NoSuchOther",
           "public class Test extends NoSuchOther {",
           "                          ^",
         },
@@ -225,7 +225,7 @@ public class BinderErrorTest {
           "}",
         },
         {
-          "<>:3: error: symbol not found NoSuchOther",
+          "<>:3: error: could not resolve NoSuchOther",
           "public class Test extends NoSuchOther {",
           "                          ^",
         },
@@ -238,7 +238,7 @@ public class BinderErrorTest {
           "}",
         },
         {
-          "<>:3: error: symbol not found NoSuchOther",
+          "<>:3: error: could not resolve NoSuchOther",
           "public class Test extends NoSuchOther {",
           "                          ^",
         },
@@ -250,7 +250,7 @@ public class BinderErrorTest {
           "}",
         },
         {
-          "<>:2: error: java/lang/Object is not an annotation", //
+          "<>:2: error: java.lang.Object is not an annotation", //
           "  @Object int x;",
           "   ^",
         },
@@ -262,7 +262,7 @@ public class BinderErrorTest {
           "}",
         },
         {
-          "<>:2: error: java/lang/Deprecated is not @Repeatable", //
+          "<>:2: error: java.lang.Deprecated is not @Repeatable", //
           "  @Deprecated @Deprecated int x;",
           "   ^",
         },
@@ -274,7 +274,7 @@ public class BinderErrorTest {
           "}",
         },
         {
-          "<>:2: error: symbol not found NoSuch.NoSuch", //
+          "<>:2: error: could not resolve NoSuch.NoSuch", //
           "  @NoSuch.NoSuch int x;",
           "   ^",
         },
@@ -286,7 +286,7 @@ public class BinderErrorTest {
           "}",
         },
         {
-          "<>:2: error: symbol not found NoSuch", //
+          "<>:2: error: symbol not found java.lang.Deprecated$NoSuch", //
           "  @Deprecated.NoSuch int x;",
           "   ^",
         },
@@ -301,7 +301,7 @@ public class BinderErrorTest {
           "}",
         },
         {
-          "<>:5: error: could not evaluate constant expression", //
+          "<>:5: error: could not resolve field NO_SUCH", //
           "  @Anno(value=Test.NO_SUCH) int x;",
           "              ^",
         },
@@ -357,6 +357,49 @@ public class BinderErrorTest {
         {
           "<>:3: error: duplicate declaration of Test$Inner", //
           "  static class Inner {}",
+          "               ^",
+        },
+      },
+      {
+        {
+          "import java.util.List;", //
+          "@interface Anno { Class<?> value() default Object.class; }",
+          "@Anno(List.NoSuch.class)",
+          "public class Test {}",
+        },
+        {
+          "<>:3: error: symbol not found java.util.List$NoSuch", //
+          "@Anno(List.NoSuch.class)",
+          "      ^",
+        },
+      },
+      {
+        {
+          "public class Test {", //
+          "  @interface Anno {",
+          "    Class<?>[] value() default Object.class;",
+          "  }",
+          "  @Anno(value={java.util.Map.Entry}) int x;",
+          "}",
+        },
+        {
+          "<>:5: error: could not resolve field Entry", //
+          "  @Anno(value={java.util.Map.Entry}) int x;",
+          "               ^",
+        },
+      },
+      {
+        {
+          "public class Test {", //
+          "  @interface Anno {",
+          "    Class<?>[] value() default Object.class;",
+          "  }",
+          "  @Anno(value={java.lang.Object}) int x;",
+          "}",
+        },
+        {
+          "<>:5: error: could not resolve field Object", //
+          "  @Anno(value={java.lang.Object}) int x;",
           "               ^",
         },
       },
