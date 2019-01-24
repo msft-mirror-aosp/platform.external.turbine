@@ -37,6 +37,7 @@ import com.google.turbine.model.Const;
 import com.google.turbine.model.Const.ArrayInitValue;
 import com.google.turbine.model.Const.Kind;
 import com.google.turbine.model.Const.Value;
+import com.google.turbine.model.TurbineElementType;
 import com.google.turbine.model.TurbineFlag;
 import com.google.turbine.model.TurbineTyKind;
 import com.google.turbine.type.AnnoInfo;
@@ -44,13 +45,13 @@ import com.google.turbine.type.Type;
 import com.google.turbine.type.Type.ArrayTy;
 import com.google.turbine.type.Type.ClassTy;
 import com.google.turbine.type.Type.ClassTy.SimpleClassTy;
+import com.google.turbine.type.Type.IntersectionTy;
 import com.google.turbine.type.Type.TyKind;
 import com.google.turbine.type.Type.TyVar;
 import com.google.turbine.type.Type.WildLowerBoundedTy;
 import com.google.turbine.type.Type.WildTy;
 import com.google.turbine.type.Type.WildUnboundedTy;
 import com.google.turbine.type.Type.WildUpperBoundedTy;
-import java.lang.annotation.ElementType;
 import java.lang.annotation.RetentionPolicy;
 import java.util.Map;
 
@@ -91,8 +92,8 @@ public class ConstBinder {
     ImmutableList<TypeBoundClass.FieldInfo> fields = fields(base.fields());
     ImmutableList<MethodInfo> methods = bindMethods(base.methods());
     return new SourceTypeBoundClass(
-        bindClassTypes(base.interfaceTypes()),
-        base.superClassType() != null ? bindClassType(base.superClassType()) : null,
+        bindTypes(base.interfaceTypes()),
+        base.superClassType() != null ? bindType(base.superClassType()) : null,
         bindTypeParameters(base.typeParameterTypes()),
         base.access(),
         methods,
@@ -106,7 +107,8 @@ public class ConstBinder {
         base.memberImports(),
         bindAnnotationMetadata(base.kind(), annos),
         annos,
-        base.source());
+        base.source(),
+        base.decl());
   }
 
   private ImmutableList<MethodInfo> bindMethods(ImmutableList<MethodInfo> methods) {
@@ -156,7 +158,7 @@ public class ConstBinder {
       return null;
     }
     RetentionPolicy retention = null;
-    ImmutableSet<ElementType> target = null;
+    ImmutableSet<TurbineElementType> target = null;
     ClassSymbol repeatable = null;
     for (AnnoInfo annotation : annotations) {
       switch (annotation.sym().binaryName()) {
@@ -188,8 +190,8 @@ public class ConstBinder {
     return RetentionPolicy.valueOf(enumValue.sym().name());
   }
 
-  private static ImmutableSet<ElementType> bindTarget(AnnoInfo annotation) {
-    ImmutableSet.Builder<ElementType> result = ImmutableSet.builder();
+  private static ImmutableSet<TurbineElementType> bindTarget(AnnoInfo annotation) {
+    ImmutableSet.Builder<TurbineElementType> result = ImmutableSet.builder();
     Const val = annotation.values().get("value");
     switch (val.kind()) {
       case ARRAY:
@@ -221,9 +223,9 @@ public class ConstBinder {
   }
 
   private static void bindTargetElement(
-      ImmutableSet.Builder<ElementType> target, EnumConstantValue enumVal) {
+      ImmutableSet.Builder<TurbineElementType> target, EnumConstantValue enumVal) {
     if (enumVal.sym().owner().binaryName().equals("java/lang/annotation/ElementType")) {
-      target.add(ElementType.valueOf(enumVal.sym().name()));
+      target.add(TurbineElementType.valueOf(enumVal.sym().name()));
     }
   }
 
@@ -268,14 +270,6 @@ public class ConstBinder {
     return value;
   }
 
-  private ImmutableList<ClassTy> bindClassTypes(ImmutableList<ClassTy> types) {
-    ImmutableList.Builder<ClassTy> result = ImmutableList.builder();
-    for (ClassTy t : types) {
-      result.add(bindClassType(t));
-    }
-    return result.build();
-  }
-
   private ImmutableList<Type> bindTypes(ImmutableList<Type> types) {
     ImmutableList.Builder<Type> result = ImmutableList.builder();
     for (Type t : types) {
@@ -292,8 +286,7 @@ public class ConstBinder {
       result.put(
           entry.getKey(),
           new TyVarInfo(
-              info.superClassBound() != null ? bindType(info.superClassBound()) : null,
-              bindTypes(info.interfaceBounds()),
+              (IntersectionTy) bindType(info.bound()),
               constEvaluator.evaluateAnnotations(info.annotations())));
     }
     return result.build();
@@ -303,25 +296,26 @@ public class ConstBinder {
     switch (type.tyKind()) {
       case TY_VAR:
         TyVar tyVar = (TyVar) type;
-        return new TyVar(tyVar.sym(), constEvaluator.evaluateAnnotations(tyVar.annos()));
+        return TyVar.create(tyVar.sym(), constEvaluator.evaluateAnnotations(tyVar.annos()));
       case CLASS_TY:
         return bindClassType((ClassTy) type);
       case ARRAY_TY:
         ArrayTy arrayTy = (ArrayTy) type;
-        return new ArrayTy(
+        return ArrayTy.create(
             bindType(arrayTy.elementType()), constEvaluator.evaluateAnnotations(arrayTy.annos()));
       case WILD_TY:
         {
           WildTy wildTy = (WildTy) type;
           switch (wildTy.boundKind()) {
             case NONE:
-              return new WildUnboundedTy(constEvaluator.evaluateAnnotations(wildTy.annotations()));
+              return WildUnboundedTy.create(
+                  constEvaluator.evaluateAnnotations(wildTy.annotations()));
             case UPPER:
-              return new WildUpperBoundedTy(
+              return WildUpperBoundedTy.create(
                   bindType(wildTy.bound()),
                   constEvaluator.evaluateAnnotations(wildTy.annotations()));
             case LOWER:
-              return new WildLowerBoundedTy(
+              return WildLowerBoundedTy.create(
                   bindType(wildTy.bound()),
                   constEvaluator.evaluateAnnotations(wildTy.annotations()));
             default:
@@ -331,6 +325,8 @@ public class ConstBinder {
       case PRIM_TY:
       case VOID_TY:
         return type;
+      case INTERSECTION_TY:
+        return IntersectionTy.create(bindTypes(((IntersectionTy) type).bounds()));
       default:
         throw new AssertionError(type.tyKind());
     }
@@ -339,11 +335,11 @@ public class ConstBinder {
   private ClassTy bindClassType(ClassTy type) {
     ClassTy classTy = type;
     ImmutableList.Builder<SimpleClassTy> classes = ImmutableList.builder();
-    for (SimpleClassTy c : classTy.classes) {
+    for (SimpleClassTy c : classTy.classes()) {
       classes.add(
-          new SimpleClassTy(
+          SimpleClassTy.create(
               c.sym(), bindTypes(c.targs()), constEvaluator.evaluateAnnotations(c.annos())));
     }
-    return new ClassTy(classes.build());
+    return ClassTy.create(classes.build());
   }
 }

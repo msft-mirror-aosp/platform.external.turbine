@@ -39,6 +39,7 @@ import com.google.turbine.diag.SourceFile;
 import com.google.turbine.diag.TurbineError;
 import com.google.turbine.diag.TurbineError.ErrorKind;
 import com.google.turbine.model.Const;
+import com.google.turbine.model.Const.ConstCastError;
 import com.google.turbine.model.Const.Value;
 import com.google.turbine.model.TurbineConstantTypeKind;
 import com.google.turbine.model.TurbineFlag;
@@ -50,6 +51,7 @@ import com.google.turbine.tree.Tree.ClassTy;
 import com.google.turbine.tree.Tree.Conditional;
 import com.google.turbine.tree.Tree.ConstVarName;
 import com.google.turbine.tree.Tree.Expression;
+import com.google.turbine.tree.Tree.Ident;
 import com.google.turbine.tree.Tree.PrimTy;
 import com.google.turbine.tree.Tree.TypeCast;
 import com.google.turbine.tree.Tree.Unary;
@@ -170,13 +172,13 @@ public strictfp class ConstEvaluator {
   private Type evalClassLiteralType(Tree.Type type) {
     switch (type.kind()) {
       case PRIM_TY:
-        return new Type.PrimTy(((PrimTy) type).tykind(), ImmutableList.of());
+        return Type.PrimTy.create(((PrimTy) type).tykind(), ImmutableList.of());
       case VOID_TY:
         return Type.VOID;
       case CLASS_TY:
         return Type.ClassTy.asNonParametricClassTy(resolveClass((ClassTy) type));
       case ARR_TY:
-        return new Type.ArrayTy(
+        return Type.ArrayTy.create(
             evalClassLiteralType(((Tree.ArrTy) type).elem()), ImmutableList.of());
       default:
         throw new AssertionError(type.kind());
@@ -193,22 +195,22 @@ public strictfp class ConstEvaluator {
    * isn't completed during the hierarchy phase).
    */
   private ClassSymbol resolveClass(ClassTy classTy) {
-    ArrayDeque<String> flat = new ArrayDeque<>();
-    for (ClassTy curr = classTy; curr != null; curr = curr.base().orNull()) {
+    ArrayDeque<Ident> flat = new ArrayDeque<>();
+    for (ClassTy curr = classTy; curr != null; curr = curr.base().orElse(null)) {
       flat.addFirst(curr.name());
     }
-    LookupResult result = scope.lookup(new LookupKey(flat));
+    LookupResult result = scope.lookup(new LookupKey(ImmutableList.copyOf(flat)));
     if (result == null) {
       throw error(classTy.position(), ErrorKind.CANNOT_RESOLVE, flat.peekFirst());
     }
     ClassSymbol classSym = (ClassSymbol) result.sym();
-    for (String bit : result.remaining()) {
+    for (Ident bit : result.remaining()) {
       classSym = resolveNext(classTy.position(), classSym, bit);
     }
     return classSym;
   }
 
-  private ClassSymbol resolveNext(int position, ClassSymbol sym, String bit) {
+  private ClassSymbol resolveNext(int position, ClassSymbol sym, Ident bit) {
     ClassSymbol next = Resolve.resolve(env, origin, sym, bit);
     if (next == null) {
       throw error(
@@ -233,7 +235,7 @@ public strictfp class ConstEvaluator {
   }
 
   FieldInfo resolveField(ConstVarName t) {
-    String simpleName = t.name().get(0);
+    Ident simpleName = t.name().get(0);
     FieldInfo field = lexicalField(env, owner, simpleName);
     if (field != null) {
       return field;
@@ -242,7 +244,7 @@ public strictfp class ConstEvaluator {
     if (field != null) {
       return field;
     }
-    ClassSymbol classSymbol = memberImports.singleMemberImport(simpleName);
+    ClassSymbol classSymbol = memberImports.singleMemberImport(simpleName.value());
     if (classSymbol != null) {
       field = Resolve.resolveField(env, origin, classSymbol, simpleName);
       if (field != null) {
@@ -292,7 +294,7 @@ public strictfp class ConstEvaluator {
 
   /** Search for constant variables in lexically enclosing scopes. */
   private FieldInfo lexicalField(
-      Env<ClassSymbol, TypeBoundClass> env, ClassSymbol sym, String name) {
+      Env<ClassSymbol, TypeBoundClass> env, ClassSymbol sym, Ident name) {
     while (sym != null) {
       TypeBoundClass info = env.get(sym);
       FieldInfo field = Resolve.resolveField(env, origin, sym, name);
@@ -442,8 +444,9 @@ public strictfp class ConstEvaluator {
         {
           ClassTy classTy = (ClassTy) t.ty();
           // TODO(cushon): check package?
-          if (!classTy.name().equals("String")) {
-            throw new AssertionError(classTy);
+          if (!classTy.name().value().equals("String")) {
+            // Explicit boxing cases (e.g. `(Boolean) false`) are legal, but not const exprs.
+            return null;
           }
           return expr.asString();
         }
@@ -912,13 +915,13 @@ public strictfp class ConstEvaluator {
       template.put(method.name(), method.returnType());
     }
 
-    ImmutableMap.Builder<String, Const> values = ImmutableMap.builder();
+    Map<String, Const> values = new LinkedHashMap<>();
     for (Expression arg : info.args()) {
       Expression expr;
       String key;
       if (arg.kind() == Tree.Kind.ASSIGN) {
         Tree.Assign assign = (Tree.Assign) arg;
-        key = assign.name();
+        key = assign.name().value();
         expr = assign.expr();
       } else {
         // expand the implicit 'value' name; `@Foo(42)` is sugar for `@Foo(value=42)`
@@ -927,21 +930,27 @@ public strictfp class ConstEvaluator {
       }
       Type ty = template.get(key);
       if (ty == null) {
-        throw error(arg.position(), ErrorKind.CANNOT_RESOLVE, key);
+        throw error(
+            arg.position(),
+            ErrorKind.CANNOT_RESOLVE,
+            String.format("element %s() in %s", key, info.sym()));
       }
       Const value = evalAnnotationValue(expr, ty);
       if (value == null) {
         throw error(expr.position(), ErrorKind.EXPRESSION_ERROR);
       }
-      values.put(key, value);
+      Const existing = values.put(key, value);
+      if (existing != null) {
+        throw error(arg.position(), ErrorKind.INVALID_ANNOTATION_ARGUMENT);
+      }
     }
-    return info.withValues(values.build());
+    return info.withValues(ImmutableMap.copyOf(values));
   }
 
   private AnnotationValue evalAnno(Tree.Anno t) {
     LookupResult result = scope.lookup(new LookupKey(t.name()));
     ClassSymbol sym = (ClassSymbol) result.sym();
-    for (String name : result.remaining()) {
+    for (Ident name : result.remaining()) {
       sym = Resolve.resolve(env, sym, sym, name);
     }
     AnnoInfo annoInfo = evaluateAnnotation(new AnnoInfo(source, sym, t, null));
@@ -997,15 +1006,14 @@ public strictfp class ConstEvaluator {
   }
 
   public Const.Value evalFieldInitializer(Expression expression, Type type) {
-    Const value;
     try {
-      value = eval(expression);
-    } catch (TurbineError error) {
+      Const value = eval(expression);
+      if (value == null || value.kind() != Const.Kind.PRIMITIVE) {
+        return null;
+      }
+      return (Const.Value) cast(type, value);
+    } catch (TurbineError | ConstCastError error) {
       return null;
     }
-    if (value == null || value.kind() != Const.Kind.PRIMITIVE) {
-      return null;
-    }
-    return (Const.Value) cast(type, value);
   }
 }

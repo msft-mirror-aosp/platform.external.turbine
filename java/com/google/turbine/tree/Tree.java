@@ -16,13 +16,16 @@
 
 package com.google.turbine.tree;
 
-import com.google.common.base.Optional;
+import static java.util.Objects.requireNonNull;
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.errorprone.annotations.Immutable;
 import com.google.turbine.diag.SourceFile;
 import com.google.turbine.model.Const;
 import com.google.turbine.model.TurbineConstantTypeKind;
 import com.google.turbine.model.TurbineTyKind;
+import java.util.Optional;
 import java.util.Set;
 
 /** An AST node. */
@@ -49,6 +52,7 @@ public abstract class Tree {
 
   /** Tree kind. */
   public enum Kind {
+    IDENT,
     WILD_TY,
     ARR_TY,
     PRIM_TY,
@@ -78,6 +82,37 @@ public abstract class Tree {
     MOD_OPENS,
     MOD_USES,
     MOD_PROVIDES
+  }
+
+  /** An identifier. */
+  @Immutable
+  public static class Ident extends Tree {
+
+    private final String value;
+
+    public Ident(int position, String value) {
+      super(position);
+      this.value = value;
+    }
+
+    @Override
+    public Kind kind() {
+      return Kind.IDENT;
+    }
+
+    @Override
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
+      return visitor.visitIdent(this, input);
+    }
+
+    public String value() {
+      return value;
+    }
+
+    @Override
+    public String toString() {
+      return value;
+    }
   }
 
   /** A type use. */
@@ -217,13 +252,13 @@ public abstract class Tree {
   /** A class, enum, interface, or annotation {@link Type}. */
   public static class ClassTy extends Type {
     private final Optional<ClassTy> base;
-    private final String name;
+    private final Ident name;
     private final ImmutableList<Type> tyargs;
 
     public ClassTy(
         int position,
         Optional<ClassTy> base,
-        String name,
+        Ident name,
         ImmutableList<Type> tyargs,
         ImmutableList<Anno> annos) {
       super(position, annos);
@@ -252,7 +287,7 @@ public abstract class Tree {
     }
 
     /** The simple name of the type. */
-    public String name() {
+    public Ident name() {
       return name;
     }
 
@@ -390,9 +425,9 @@ public abstract class Tree {
 
   /** A JLS 6.5.6.1 simple name that refers to a JSL 4.12.4 constant variable. */
   public static class ConstVarName extends Expression {
-    private final ImmutableList<String> name;
+    private final ImmutableList<Ident> name;
 
-    public ConstVarName(int position, ImmutableList<String> name) {
+    public ConstVarName(int position, ImmutableList<Ident> name) {
       super(position);
       this.name = name;
     }
@@ -407,7 +442,7 @@ public abstract class Tree {
       return visitor.visitConstVarName(this, input);
     }
 
-    public ImmutableList<String> name() {
+    public ImmutableList<Ident> name() {
       return name;
     }
   }
@@ -439,13 +474,13 @@ public abstract class Tree {
 
   /** A JLS 15.26 assignment expression. */
   public static class Assign extends Expression {
-    private final String name;
+    private final Ident name;
     private final Expression expr;
 
-    public Assign(int position, String name, Expression expr) {
+    public Assign(int position, Ident name, Expression expr) {
       super(position);
-      this.name = name;
-      this.expr = expr;
+      this.name = requireNonNull(name);
+      this.expr = requireNonNull(expr);
     }
 
     @Override
@@ -458,7 +493,7 @@ public abstract class Tree {
       return visitor.visitAssign(this, input);
     }
 
-    public String name() {
+    public Ident name() {
       return name;
     }
 
@@ -583,11 +618,11 @@ public abstract class Tree {
 
   /** A JLS 7.5 import declaration. */
   public static class ImportDecl extends Tree {
-    private final ImmutableList<String> type;
+    private final ImmutableList<Ident> type;
     private final boolean stat;
     private final boolean wild;
 
-    public ImportDecl(int position, ImmutableList<String> type, boolean stat, boolean wild) {
+    public ImportDecl(int position, ImmutableList<Ident> type, boolean stat, boolean wild) {
       super(position);
       this.type = type;
       this.stat = stat;
@@ -604,7 +639,7 @@ public abstract class Tree {
       return visitor.visitImportDecl(this, input);
     }
 
-    public ImmutableList<String> type() {
+    public ImmutableList<Ident> type() {
       return type;
     }
 
@@ -624,7 +659,7 @@ public abstract class Tree {
     private final ImmutableSet<TurbineModifier> mods;
     private final ImmutableList<Anno> annos;
     private final Tree ty;
-    private final String name;
+    private final Ident name;
     private final Optional<Expression> init;
 
     public VarDecl(
@@ -632,7 +667,7 @@ public abstract class Tree {
         Set<TurbineModifier> mods,
         ImmutableList<Anno> annos,
         Tree ty,
-        String name,
+        Ident name,
         Optional<Expression> init) {
       super(position);
       this.mods = ImmutableSet.copyOf(mods);
@@ -664,7 +699,7 @@ public abstract class Tree {
       return ty;
     }
 
-    public String name() {
+    public Ident name() {
       return name;
     }
 
@@ -679,7 +714,7 @@ public abstract class Tree {
     private final ImmutableList<Anno> annos;
     private final ImmutableList<TyParam> typarams;
     private final Optional<Tree> ret;
-    private final String name;
+    private final Ident name;
     private final ImmutableList<VarDecl> params;
     private final ImmutableList<ClassTy> exntys;
     private final Optional<Tree> defaultValue;
@@ -690,7 +725,7 @@ public abstract class Tree {
         ImmutableList<Anno> annos,
         ImmutableList<TyParam> typarams,
         Optional<Tree> ret,
-        String name,
+        Ident name,
         ImmutableList<VarDecl> params,
         ImmutableList<ClassTy> exntys,
         Optional<Tree> defaultValue) {
@@ -731,7 +766,7 @@ public abstract class Tree {
       return ret;
     }
 
-    public String name() {
+    public Ident name() {
       return name;
     }
 
@@ -750,10 +785,10 @@ public abstract class Tree {
 
   /** A JLS 9.7 annotation. */
   public static class Anno extends Tree {
-    private final ImmutableList<String> name;
+    private final ImmutableList<Ident> name;
     private final ImmutableList<Expression> args;
 
-    public Anno(int position, ImmutableList<String> name, ImmutableList<Expression> args) {
+    public Anno(int position, ImmutableList<Ident> name, ImmutableList<Expression> args) {
       super(position);
       this.name = name;
       this.args = args;
@@ -769,7 +804,7 @@ public abstract class Tree {
       return visitor.visitAnno(this, input);
     }
 
-    public ImmutableList<String> name() {
+    public ImmutableList<Ident> name() {
       return name;
     }
 
@@ -811,7 +846,7 @@ public abstract class Tree {
   public static class TyDecl extends Tree {
     private final ImmutableSet<TurbineModifier> mods;
     private final ImmutableList<Anno> annos;
-    private final String name;
+    private final Ident name;
     private final ImmutableList<TyParam> typarams;
     private final Optional<ClassTy> xtnds;
     private final ImmutableList<ClassTy> impls;
@@ -822,7 +857,7 @@ public abstract class Tree {
         int position,
         Set<TurbineModifier> mods,
         ImmutableList<Anno> annos,
-        String name,
+        Ident name,
         ImmutableList<TyParam> typarams,
         Optional<ClassTy> xtnds,
         ImmutableList<ClassTy> impls,
@@ -857,7 +892,7 @@ public abstract class Tree {
       return annos;
     }
 
-    public String name() {
+    public Ident name() {
       return name;
     }
 
@@ -884,12 +919,12 @@ public abstract class Tree {
 
   /** A JLS 4.4. type variable declaration. */
   public static class TyParam extends Tree {
-    private final String name;
+    private final Ident name;
     private final ImmutableList<Tree> bounds;
     private final ImmutableList<Anno> annos;
 
     public TyParam(
-        int position, String name, ImmutableList<Tree> bounds, ImmutableList<Anno> annos) {
+        int position, Ident name, ImmutableList<Tree> bounds, ImmutableList<Anno> annos) {
       super(position);
       this.name = name;
       this.bounds = bounds;
@@ -906,7 +941,7 @@ public abstract class Tree {
       return visitor.visitTyParam(this, input);
     }
 
-    public String name() {
+    public Ident name() {
       return name;
     }
 
@@ -921,10 +956,10 @@ public abstract class Tree {
 
   /** A JLS 7.4 package declaration. */
   public static class PkgDecl extends Tree {
-    private final ImmutableList<String> name;
+    private final ImmutableList<Ident> name;
     private final ImmutableList<Anno> annos;
 
-    public PkgDecl(int position, ImmutableList<String> name, ImmutableList<Anno> annos) {
+    public PkgDecl(int position, ImmutableList<Ident> name, ImmutableList<Anno> annos) {
       super(position);
       this.name = name;
       this.annos = annos;
@@ -940,7 +975,7 @@ public abstract class Tree {
       return visitor.visitPkgDecl(this, input);
     }
 
-    public ImmutableList<String> name() {
+    public ImmutableList<Ident> name() {
       return name;
     }
 
@@ -1127,14 +1162,14 @@ public abstract class Tree {
   /** A JLS 7.7.3 module uses directive. */
   public static class ModUses extends ModDirective {
 
-    private final ImmutableList<String> typeName;
+    private final ImmutableList<Ident> typeName;
 
-    public ModUses(int position, ImmutableList<String> typeName) {
+    public ModUses(int position, ImmutableList<Ident> typeName) {
       super(position);
       this.typeName = typeName;
     }
 
-    public ImmutableList<String> typeName() {
+    public ImmutableList<Ident> typeName() {
       return typeName;
     }
 
@@ -1157,23 +1192,23 @@ public abstract class Tree {
   /** A JLS 7.7.4 module uses directive. */
   public static class ModProvides extends ModDirective {
 
-    private final ImmutableList<String> typeName;
-    private final ImmutableList<ImmutableList<String>> implNames;
+    private final ImmutableList<Ident> typeName;
+    private final ImmutableList<ImmutableList<Ident>> implNames;
 
     public ModProvides(
         int position,
-        ImmutableList<String> typeName,
-        ImmutableList<ImmutableList<String>> implNames) {
+        ImmutableList<Ident> typeName,
+        ImmutableList<ImmutableList<Ident>> implNames) {
       super(position);
       this.typeName = typeName;
       this.implNames = implNames;
     }
 
-    public ImmutableList<String> typeName() {
+    public ImmutableList<Ident> typeName() {
       return typeName;
     }
 
-    public ImmutableList<ImmutableList<String>> implNames() {
+    public ImmutableList<ImmutableList<Ident>> implNames() {
       return implNames;
     }
 
@@ -1195,6 +1230,8 @@ public abstract class Tree {
 
   /** A visitor for {@link Tree}s. */
   public interface Visitor<I, O> {
+    O visitIdent(Ident ident, I input);
+
     O visitWildTy(WildTy visitor, I input);
 
     O visitArrTy(ArrTy arrTy, I input);

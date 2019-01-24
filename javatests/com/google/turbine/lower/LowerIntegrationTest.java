@@ -231,7 +231,7 @@ public class LowerIntegrationTest {
       "import_wild_order.test",
       "canon_recursive.test",
       // TODO(cushon): crashes ASM, see:
-      // http://forge.ow2.org/tracker/?func=detail&aid=317776&group_id=23&atid=100023
+      // https://gitlab.ow2.org/asm/asm/issues/317776
       // "canon_array.test",
       "java_lang_object.test",
       "visible_package.test",
@@ -303,6 +303,11 @@ public class LowerIntegrationTest {
       // TODO(cushon): support for source level 9 in integration tests
       // "B74332665.test",
       "memberimport.test",
+      "type_anno_c_array.test",
+      // https://bugs.openjdk.java.net/browse/JDK-8054064 ?
+      "shadow_inherited.test",
+      "static_final_boxed.test",
+      "anno_void.test",
     };
     List<Object[]> tests =
         ImmutableList.copyOf(testCases).stream().map(x -> new Object[] {x}).collect(toList());
