@@ -16,8 +16,6 @@
 
 package com.google.turbine.binder;
 
-
-import com.google.common.base.Optional;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -55,6 +53,7 @@ import com.google.turbine.binder.sym.FieldSymbol;
 import com.google.turbine.binder.sym.ModuleSymbol;
 import com.google.turbine.diag.TurbineError;
 import com.google.turbine.diag.TurbineError.ErrorKind;
+import com.google.turbine.diag.TurbineLog;
 import com.google.turbine.model.Const;
 import com.google.turbine.model.TurbineFlag;
 import com.google.turbine.tree.Tree;
@@ -62,6 +61,7 @@ import com.google.turbine.tree.Tree.CompUnit;
 import com.google.turbine.tree.Tree.ModDecl;
 import com.google.turbine.type.Type;
 import java.util.List;
+import java.util.Optional;
 
 /** The entry point for analysis. */
 public class Binder {
@@ -91,17 +91,24 @@ public class Binder {
     CompoundEnv<ModuleSymbol, ModuleInfo> classPathModuleEnv =
         CompoundEnv.of(classpath.moduleEnv()).append(bootclasspath.moduleEnv());
 
+    TurbineLog log = new TurbineLog();
+
     BindPackagesResult bindPackagesResult =
-        bindPackages(ienv, tli, preProcessedUnits, classPathEnv);
+        bindPackages(log, ienv, tli, preProcessedUnits, classPathEnv);
 
     SimpleEnv<ClassSymbol, PackageSourceBoundClass> psenv = bindPackagesResult.classes;
     SimpleEnv<ModuleSymbol, PackageSourceBoundModule> modules = bindPackagesResult.modules;
 
-    Env<ClassSymbol, SourceHeaderBoundClass> henv = bindHierarchy(syms, psenv, classPathEnv);
+    Env<ClassSymbol, SourceHeaderBoundClass> henv = bindHierarchy(log, syms, psenv, classPathEnv);
 
     Env<ClassSymbol, SourceTypeBoundClass> tenv =
         bindTypes(
-            syms, henv, CompoundEnv.<ClassSymbol, HeaderBoundClass>of(classPathEnv).append(henv));
+            log,
+            syms,
+            henv,
+            CompoundEnv.<ClassSymbol, HeaderBoundClass>of(classPathEnv).append(henv));
+
+    log.maybeThrow();
 
     tenv =
         constants(
@@ -157,6 +164,7 @@ public class Binder {
 
   /** Initializes scopes for compilation unit and package-level lookup. */
   private static BindPackagesResult bindPackages(
+      TurbineLog log,
       Env<ClassSymbol, SourceBoundClass> ienv,
       TopLevelIndex tli,
       ImmutableList<PreprocessedCompUnit> units,
@@ -177,9 +185,10 @@ public class Binder {
       Scope packageScope = tli.lookupPackage(packagename);
       CanonicalSymbolResolver importResolver =
           new CanonicalResolver(
-              packagename, CompoundEnv.<ClassSymbol, BoundClass>of(classPathEnv).append(ienv));
+              unit.packageName(),
+              CompoundEnv.<ClassSymbol, BoundClass>of(classPathEnv).append(ienv));
       ImportScope importScope =
-          ImportIndex.create(unit.source(), importResolver, tli, unit.imports());
+          ImportIndex.create(log.withSource(unit.source()), importResolver, tli, unit.imports());
       ImportScope wildImportScope = WildImportIndex.create(importResolver, tli, unit.imports());
       MemberImportIndex memberImports =
           new MemberImportIndex(unit.source(), importResolver, tli, unit.imports());
@@ -203,6 +212,7 @@ public class Binder {
 
   /** Binds the type hierarchy (superclasses and interfaces) for all classes in the compilation. */
   private static Env<ClassSymbol, SourceHeaderBoundClass> bindHierarchy(
+      TurbineLog log,
       Iterable<ClassSymbol> syms,
       final SimpleEnv<ClassSymbol, PackageSourceBoundClass> psenv,
       CompoundEnv<ClassSymbol, BytecodeBoundClass> classPathEnv) {
@@ -216,7 +226,8 @@ public class Binder {
             @Override
             public SourceHeaderBoundClass complete(
                 Env<ClassSymbol, HeaderBoundClass> henv, ClassSymbol sym) {
-              return HierarchyBinder.bind(sym, psenv.get(sym), henv);
+              PackageSourceBoundClass base = psenv.get(sym);
+              return HierarchyBinder.bind(log.withSource(base.source()), sym, base, henv);
             }
           });
     }
@@ -224,12 +235,14 @@ public class Binder {
   }
 
   private static Env<ClassSymbol, SourceTypeBoundClass> bindTypes(
+      TurbineLog log,
       ImmutableSet<ClassSymbol> syms,
       Env<ClassSymbol, SourceHeaderBoundClass> shenv,
       Env<ClassSymbol, HeaderBoundClass> henv) {
     SimpleEnv.Builder<ClassSymbol, SourceTypeBoundClass> builder = SimpleEnv.builder();
     for (ClassSymbol sym : syms) {
-      builder.put(sym, TypeBinder.bind(henv, sym, shenv.get(sym)));
+      SourceHeaderBoundClass base = shenv.get(sym);
+      builder.put(sym, TypeBinder.bind(log.withSource(base.source()), henv, sym, base));
     }
     return builder.build();
   }
@@ -257,20 +270,18 @@ public class Binder {
             new Env<ModuleSymbol, ModuleInfo>() {
               @Override
               public ModuleInfo get(ModuleSymbol sym) {
-                if (modules.asMap().containsKey(sym)) {
-                  PackageSourceBoundModule info = modules.get(sym);
-                  if (info != null) {
-                    return new ModuleInfo(
-                        info.module().moduleName(),
-                        moduleVersion.orNull(),
-                        /* flags= */ 0,
-                        /* annos= */ ImmutableList.of(),
-                        /* requires= */ ImmutableList.of(),
-                        /* exports= */ ImmutableList.of(),
-                        /* opens= */ ImmutableList.of(),
-                        /* uses= */ ImmutableList.of(),
-                        /* provides= */ ImmutableList.of());
-                  }
+                PackageSourceBoundModule info = modules.get(sym);
+                if (info != null) {
+                  return new ModuleInfo(
+                      info.module().moduleName(),
+                      moduleVersion.orElse(null),
+                      /* flags= */ 0,
+                      /* annos= */ ImmutableList.of(),
+                      /* requires= */ ImmutableList.of(),
+                      /* exports= */ ImmutableList.of(),
+                      /* opens= */ ImmutableList.of(),
+                      /* uses= */ ImmutableList.of(),
+                      /* provides= */ ImmutableList.of());
                 }
                 return null;
               }

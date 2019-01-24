@@ -17,6 +17,7 @@
 package com.google.turbine.options;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth8.assertThat;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -79,7 +80,7 @@ public class TurbineOptionsTest {
     TurbineOptions options =
         TurbineOptionsParser.parse(Iterables.concat(BASE_ARGS, Arrays.asList(lines)));
 
-    assertThat(options.outputFile()).isEqualTo("out.jar");
+    assertThat(options.output()).hasValue("out.jar");
     assertThat(options.sourceJars())
         .containsExactly("sources1.srcjar", "sources2.srcjar")
         .inOrder();
@@ -181,8 +182,8 @@ public class TurbineOptionsTest {
 
     TurbineOptions options = TurbineOptionsParser.parse(Arrays.asList(lines));
 
-    assertThat(options.targetLabel()).isAbsent();
-    assertThat(options.injectingRuleKind()).isAbsent();
+    assertThat(options.targetLabel()).isEmpty();
+    assertThat(options.injectingRuleKind()).isEmpty();
   }
 
   @Test
@@ -222,13 +223,9 @@ public class TurbineOptionsTest {
   }
 
   @Test
-  public void failIfMissingExpectedArgs() throws Exception {
-    try {
-      TurbineOptions.builder().build();
-      fail();
-    } catch (NullPointerException e) {
-      assertThat(e).hasMessage("output must not be null");
-    }
+  public void tolerateMissingOutput() throws Exception {
+    TurbineOptions options = TurbineOptions.builder().build();
+    assertThat(options.output()).isEmpty();
   }
 
   @Test
