@@ -29,6 +29,9 @@ java_library_host {
         "jsr305-3.0.1",
     ],
 
+    plugins: ["dagger2-auto-value"],
+    libs: ["dagger2-auto-value"],
+
     proto: {
         type: "full",
     },
