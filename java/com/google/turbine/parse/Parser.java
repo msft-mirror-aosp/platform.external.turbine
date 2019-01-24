@@ -29,6 +29,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.errorprone.annotations.CheckReturnValue;
 import com.google.turbine.diag.SourceFile;
 import com.google.turbine.diag.TurbineError;
 import com.google.turbine.diag.TurbineError.ErrorKind;
@@ -62,7 +63,6 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.EnumSet;
 import java.util.List;
-import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 
 /**
