@@ -16,29 +16,31 @@
 
 package com.google.turbine.binder;
 
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.turbine.testing.TestClassPaths.TURBINE_BOOTCLASSPATH;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.turbine.binder.bound.SourceTypeBoundClass;
+import com.google.turbine.binder.bound.TypeBoundClass.FieldInfo;
 import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.diag.TurbineError;
 import com.google.turbine.lower.IntegrationTestSupport;
+import com.google.turbine.model.TurbineElementType;
 import com.google.turbine.model.TurbineFlag;
 import com.google.turbine.parse.Parser;
 import com.google.turbine.tree.Tree;
 import java.io.OutputStream;
-import java.lang.annotation.ElementType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import org.junit.Rule;
@@ -76,7 +78,7 @@ public class BinderTest {
                 units,
                 ClassPathBinder.bindClasspath(Collections.emptyList()),
                 TURBINE_BOOTCLASSPATH,
-                /* moduleVersion=*/ Optional.absent())
+                /* moduleVersion=*/ Optional.empty())
             .units();
 
     assertThat(bound.keySet())
@@ -122,7 +124,7 @@ public class BinderTest {
                 units,
                 ClassPathBinder.bindClasspath(Collections.emptyList()),
                 TURBINE_BOOTCLASSPATH,
-                /* moduleVersion=*/ Optional.absent())
+                /* moduleVersion=*/ Optional.empty())
             .units();
 
     assertThat(bound.keySet())
@@ -162,7 +164,7 @@ public class BinderTest {
                 units,
                 ClassPathBinder.bindClasspath(Collections.emptyList()),
                 TURBINE_BOOTCLASSPATH,
-                /* moduleVersion=*/ Optional.absent())
+                /* moduleVersion=*/ Optional.empty())
             .units();
 
     assertThat(bound.get(new ClassSymbol("other/Foo")).superclass())
@@ -192,7 +194,7 @@ public class BinderTest {
           units,
           ClassPathBinder.bindClasspath(Collections.emptyList()),
           TURBINE_BOOTCLASSPATH,
-          /* moduleVersion=*/ Optional.absent());
+          /* moduleVersion=*/ Optional.empty());
       fail();
     } catch (TurbineError e) {
       assertThat(e.getMessage()).contains("cycle in class hierarchy: a.A -> b.B -> a.A");
@@ -213,7 +215,7 @@ public class BinderTest {
                 units,
                 ClassPathBinder.bindClasspath(Collections.emptyList()),
                 TURBINE_BOOTCLASSPATH,
-                /* moduleVersion=*/ Optional.absent())
+                /* moduleVersion=*/ Optional.empty())
             .units();
 
     SourceTypeBoundClass a = bound.get(new ClassSymbol("com/test/Annotation"));
@@ -242,7 +244,7 @@ public class BinderTest {
                 units,
                 ClassPathBinder.bindClasspath(Collections.emptyList()),
                 TURBINE_BOOTCLASSPATH,
-                /* moduleVersion=*/ Optional.absent())
+                /* moduleVersion=*/ Optional.empty())
             .units();
 
     SourceTypeBoundClass a = bound.get(new ClassSymbol("a/A"));
@@ -282,11 +284,39 @@ public class BinderTest {
                 units,
                 ClassPathBinder.bindClasspath(ImmutableList.of(libJar)),
                 TURBINE_BOOTCLASSPATH,
-                /* moduleVersion=*/ Optional.absent())
+                /* moduleVersion=*/ Optional.empty())
             .units();
 
     SourceTypeBoundClass a = bound.get(new ClassSymbol("C$A"));
-    assertThat(a.annotationMetadata().target()).containsExactly(ElementType.TYPE_USE);
+    assertThat(a.annotationMetadata().target()).containsExactly(TurbineElementType.TYPE_USE);
+  }
+
+  // Test that we don't crash on invalid constant field initializers.
+  // (Error reporting is deferred to javac.)
+  @Test
+  public void invalidConst() throws Exception {
+    List<Tree.CompUnit> units = new ArrayList<>();
+    units.add(
+        parseLines(
+            "package a;", //
+            "public class A {",
+            "  public static final boolean b = true == 42;",
+            "}"));
+
+    ImmutableMap<ClassSymbol, SourceTypeBoundClass> bound =
+        Binder.bind(
+                units,
+                ClassPathBinder.bindClasspath(Collections.emptyList()),
+                TURBINE_BOOTCLASSPATH,
+                /* moduleVersion=*/ Optional.empty())
+            .units();
+
+    assertThat(bound.keySet()).containsExactly(new ClassSymbol("a/A"));
+
+    SourceTypeBoundClass a = bound.get(new ClassSymbol("a/A"));
+    FieldInfo f = getOnlyElement(a.fields());
+    assertThat(f.name()).isEqualTo("b");
+    assertThat(f.value()).isNull();
   }
 
   private Tree.CompUnit parseLines(String... lines) {
