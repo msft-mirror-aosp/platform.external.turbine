@@ -20,6 +20,7 @@ import static com.google.common.collect.Iterables.getOnlyElement;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
+import com.google.errorprone.annotations.CheckReturnValue;
 import com.google.turbine.diag.TurbineError;
 import com.google.turbine.diag.TurbineError.ErrorKind;
 import com.google.turbine.model.Const;
@@ -29,7 +30,6 @@ import com.google.turbine.tree.Tree.ClassLiteral;
 import com.google.turbine.tree.Tree.ClassTy;
 import com.google.turbine.tree.Tree.Expression;
 import com.google.turbine.tree.TurbineOperatorKind;
-import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 
 /** A parser for compile-time constant expressions. */
