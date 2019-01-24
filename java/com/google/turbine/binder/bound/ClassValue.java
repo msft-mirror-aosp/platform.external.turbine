@@ -18,6 +18,7 @@ package com.google.turbine.binder.bound;
 
 import com.google.turbine.model.Const;
 import com.google.turbine.type.Type;
+import java.util.Objects;
 
 /** A class literal constant. */
 public class ClassValue extends Const {
@@ -41,5 +42,15 @@ public class ClassValue extends Const {
   /** The class name. */
   public Type type() {
     return type;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(type);
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    return obj instanceof ClassValue && type().equals(((ClassValue) obj).type());
   }
 }

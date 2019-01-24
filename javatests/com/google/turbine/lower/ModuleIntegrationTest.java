@@ -21,13 +21,14 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.stream.Collectors.toList;
 import static org.junit.Assert.assertEquals;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
+import com.google.turbine.binder.CtSymClassBinder;
 import com.google.turbine.binder.JimageClassBinder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Optional;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import org.junit.Rule;
@@ -94,7 +95,12 @@ public class ModuleIntegrationTest {
 
     Map<String, byte[]> actual =
         IntegrationTestSupport.runTurbine(
-            input.sources, classpathJar, JimageClassBinder.bindDefault(), Optional.of("42"));
+            input.sources,
+            classpathJar,
+            Double.parseDouble(System.getProperty("java.class.version")) < 54
+                ? JimageClassBinder.bindDefault()
+                : CtSymClassBinder.bind("9"),
+            Optional.of("42"));
 
     assertEquals(dump(expected), dump(actual));
   }
