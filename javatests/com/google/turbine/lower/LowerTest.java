@@ -22,7 +22,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
@@ -44,6 +43,11 @@ import com.google.turbine.model.TurbineTyKind;
 import com.google.turbine.parse.Parser;
 import com.google.turbine.testing.AsmUtils;
 import com.google.turbine.type.Type;
+import com.google.turbine.type.Type.ClassTy;
+import com.google.turbine.type.Type.ClassTy.SimpleClassTy;
+import com.google.turbine.type.Type.IntersectionTy;
+import com.google.turbine.type.Type.PrimTy;
+import com.google.turbine.type.Type.TyVar;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
@@ -52,6 +56,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import org.junit.Rule;
@@ -75,14 +80,14 @@ public class LowerTest {
   @Test
   public void hello() throws Exception {
 
-    ImmutableList<Type.ClassTy> interfaceTypes =
+    ImmutableList<Type> interfaceTypes =
         ImmutableList.of(
-            new Type.ClassTy(
+            ClassTy.create(
                 ImmutableList.of(
-                    new Type.ClassTy.SimpleClassTy(
+                    SimpleClassTy.create(
                         new ClassSymbol("java/util/List"),
                         ImmutableList.of(
-                            new Type.TyVar(
+                            TyVar.create(
                                 new TyVarSymbol(new ClassSymbol("test/Test"), "V"),
                                 ImmutableList.of())),
                         ImmutableList.of()))));
@@ -91,13 +96,14 @@ public class LowerTest {
         ImmutableMap.of(
             new TyVarSymbol(new ClassSymbol("test/Test"), "V"),
             new SourceTypeBoundClass.TyVarInfo(
-                new Type.ClassTy(
+                IntersectionTy.create(
                     ImmutableList.of(
-                        new Type.ClassTy.SimpleClassTy(
-                            new ClassSymbol("test/Test$Inner"),
-                            ImmutableList.of(),
-                            ImmutableList.of()))),
-                ImmutableList.of(),
+                        ClassTy.create(
+                            ImmutableList.of(
+                                SimpleClassTy.create(
+                                    new ClassSymbol("test/Test$Inner"),
+                                    ImmutableList.of(),
+                                    ImmutableList.of()))))),
                 ImmutableList.of()));
     int access = TurbineFlag.ACC_SUPER | TurbineFlag.ACC_PUBLIC;
     ImmutableList<SourceTypeBoundClass.MethodInfo> methods =
@@ -105,7 +111,7 @@ public class LowerTest {
             new SourceTypeBoundClass.MethodInfo(
                 new MethodSymbol(new ClassSymbol("test/Test"), "f"),
                 ImmutableMap.of(),
-                new Type.PrimTy(TurbineConstantTypeKind.INT, ImmutableList.of()),
+                PrimTy.create(TurbineConstantTypeKind.INT, ImmutableList.of()),
                 ImmutableList.of(),
                 ImmutableList.of(),
                 TurbineFlag.ACC_STATIC | TurbineFlag.ACC_PUBLIC,
@@ -118,34 +124,35 @@ public class LowerTest {
                 ImmutableMap.of(
                     new TyVarSymbol(new MethodSymbol(new ClassSymbol("test/Test"), "g"), "V"),
                     new SourceTypeBoundClass.TyVarInfo(
-                        null,
-                        ImmutableList.of(
-                            new Type.ClassTy(
-                                ImmutableList.of(
-                                    new Type.ClassTy.SimpleClassTy(
-                                        new ClassSymbol("java/lang/Runnable"),
-                                        ImmutableList.of(),
-                                        ImmutableList.of())))),
+                        IntersectionTy.create(
+                            ImmutableList.of(
+                                ClassTy.create(
+                                    ImmutableList.of(
+                                        SimpleClassTy.create(
+                                            new ClassSymbol("java/lang/Runnable"),
+                                            ImmutableList.of(),
+                                            ImmutableList.of()))))),
                         ImmutableList.of()),
                     new TyVarSymbol(new MethodSymbol(new ClassSymbol("test/Test"), "g"), "E"),
                     new SourceTypeBoundClass.TyVarInfo(
-                        new Type.ClassTy(
+                        IntersectionTy.create(
                             ImmutableList.of(
-                                new Type.ClassTy.SimpleClassTy(
-                                    new ClassSymbol("java/lang/Error"),
-                                    ImmutableList.of(),
-                                    ImmutableList.of()))),
-                        ImmutableList.of(),
+                                ClassTy.create(
+                                    ImmutableList.of(
+                                        SimpleClassTy.create(
+                                            new ClassSymbol("java/lang/Error"),
+                                            ImmutableList.of(),
+                                            ImmutableList.of()))))),
                         ImmutableList.of())),
                 Type.VOID,
                 ImmutableList.of(
                     new SourceTypeBoundClass.ParamInfo(
-                        new Type.PrimTy(TurbineConstantTypeKind.INT, ImmutableList.of()),
+                        PrimTy.create(TurbineConstantTypeKind.INT, ImmutableList.of()),
                         "foo",
                         ImmutableList.of(),
                         0)),
                 ImmutableList.of(
-                    new Type.TyVar(
+                    TyVar.create(
                         new TyVarSymbol(new MethodSymbol(new ClassSymbol("test/Test"), "g"), "E"),
                         ImmutableList.of())),
                 TurbineFlag.ACC_PUBLIC,
@@ -185,6 +192,7 @@ public class LowerTest {
             null,
             null,
             ImmutableList.of(),
+            null,
             null);
 
     SourceTypeBoundClass i =
@@ -204,6 +212,7 @@ public class LowerTest {
             null,
             null,
             ImmutableList.of(),
+            null,
             null);
 
     SimpleEnv.Builder<ClassSymbol, SourceTypeBoundClass> b = SimpleEnv.builder();
@@ -247,13 +256,13 @@ public class LowerTest {
                             "}"))),
             ClassPathBinder.bindClasspath(ImmutableList.of()),
             TURBINE_BOOTCLASSPATH,
-            /* moduleVersion=*/ Optional.absent());
+            /* moduleVersion=*/ Optional.empty());
     Map<String, byte[]> lowered =
         Lower.lowerAll(bound.units(), bound.modules(), bound.classPathEnv()).bytes();
     List<String> attributes = new ArrayList<>();
     new ClassReader(lowered.get("Test$Inner$InnerMost"))
         .accept(
-            new ClassVisitor(Opcodes.ASM6) {
+            new ClassVisitor(Opcodes.ASM7) {
               @Override
               public void visitInnerClass(
                   String name, String outerName, String innerName, int access) {
@@ -325,17 +334,17 @@ public class LowerTest {
                             "}"))),
             ClassPathBinder.bindClasspath(ImmutableList.of()),
             TURBINE_BOOTCLASSPATH,
-            /* moduleVersion=*/ Optional.absent());
+            /* moduleVersion=*/ Optional.empty());
     Map<String, byte[]> lowered =
         Lower.lowerAll(bound.units(), bound.modules(), bound.classPathEnv()).bytes();
     TypePath[] path = new TypePath[1];
     new ClassReader(lowered.get("Test"))
         .accept(
-            new ClassVisitor(Opcodes.ASM6) {
+            new ClassVisitor(Opcodes.ASM7) {
               @Override
               public FieldVisitor visitField(
                   int access, String name, String desc, String signature, Object value) {
-                return new FieldVisitor(Opcodes.ASM6) {
+                return new FieldVisitor(Opcodes.ASM7) {
                   @Override
                   public AnnotationVisitor visitTypeAnnotation(
                       int typeRef, TypePath typePath, String desc, boolean visible) {
@@ -382,7 +391,7 @@ public class LowerTest {
     Map<String, Object> values = new LinkedHashMap<>();
     new ClassReader(actual.get("Test"))
         .accept(
-            new ClassVisitor(Opcodes.ASM6) {
+            new ClassVisitor(Opcodes.ASM7) {
               @Override
               public FieldVisitor visitField(
                   int access, String name, String desc, String signature, Object value) {
@@ -403,13 +412,13 @@ public class LowerTest {
             ImmutableList.of(Parser.parse("@Deprecated class Test {}")),
             ClassPathBinder.bindClasspath(ImmutableList.of()),
             TURBINE_BOOTCLASSPATH,
-            /* moduleVersion=*/ Optional.absent());
+            /* moduleVersion=*/ Optional.empty());
     Map<String, byte[]> lowered =
         Lower.lowerAll(bound.units(), bound.modules(), bound.classPathEnv()).bytes();
     int[] acc = {0};
     new ClassReader(lowered.get("Test"))
         .accept(
-            new ClassVisitor(Opcodes.ASM6) {
+            new ClassVisitor(Opcodes.ASM7) {
               @Override
               public void visit(
                   int version,
@@ -594,7 +603,10 @@ public class LowerTest {
     } catch (TurbineError error) {
       assertThat(error)
           .hasMessageThat()
-          .contains("Test.java: error: could not locate class file for A");
+          .contains(
+              "Test.java:3: error: could not locate class file for A\n"
+                  + "     I i;\n"
+                  + "       ^");
     }
   }
 
@@ -610,7 +622,7 @@ public class LowerTest {
     int[] testAccess = {0};
     new ClassReader(lowered.get("Test"))
         .accept(
-            new ClassVisitor(Opcodes.ASM6) {
+            new ClassVisitor(Opcodes.ASM7) {
               @Override
               public void visit(
                   int version,
