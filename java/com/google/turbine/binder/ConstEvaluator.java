@@ -18,12 +18,13 @@ package com.google.turbine.binder;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.turbine.binder.bound.AnnotationValue;
-import com.google.turbine.binder.bound.ClassValue;
 import com.google.turbine.binder.bound.EnumConstantValue;
+import com.google.turbine.binder.bound.TurbineClassValue;
 import com.google.turbine.binder.bound.TypeBoundClass;
 import com.google.turbine.binder.bound.TypeBoundClass.FieldInfo;
 import com.google.turbine.binder.bound.TypeBoundClass.MethodInfo;
@@ -35,6 +36,7 @@ import com.google.turbine.binder.lookup.MemberImportIndex;
 import com.google.turbine.binder.lookup.Scope;
 import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.binder.sym.FieldSymbol;
+import com.google.turbine.binder.sym.Symbol;
 import com.google.turbine.diag.SourceFile;
 import com.google.turbine.diag.TurbineError;
 import com.google.turbine.diag.TurbineError.ErrorKind;
@@ -166,7 +168,7 @@ public strictfp class ConstEvaluator {
 
   /** Evaluates a class literal. */
   Const evalClassLiteral(ClassLiteral t) {
-    return new ClassValue(evalClassLiteralType(t.type()));
+    return new TurbineClassValue(evalClassLiteralType(t.type()));
   }
 
   private Type evalClassLiteralType(Tree.Type type) {
@@ -202,6 +204,9 @@ public strictfp class ConstEvaluator {
     LookupResult result = scope.lookup(new LookupKey(ImmutableList.copyOf(flat)));
     if (result == null) {
       throw error(classTy.position(), ErrorKind.CANNOT_RESOLVE, flat.peekFirst());
+    }
+    if (result.sym().symKind() != Symbol.Kind.CLASS) {
+      throw error(classTy.position(), ErrorKind.UNEXPECTED_TYPE_PARAMETER, flat.peekFirst());
     }
     ClassSymbol classSym = (ClassSymbol) result.sym();
     for (Ident bit : result.remaining()) {
@@ -949,9 +954,19 @@ public strictfp class ConstEvaluator {
 
   private AnnotationValue evalAnno(Tree.Anno t) {
     LookupResult result = scope.lookup(new LookupKey(t.name()));
+    if (result == null) {
+      throw error(
+          t.name().get(0).position(), ErrorKind.CANNOT_RESOLVE, Joiner.on(".").join(t.name()));
+    }
     ClassSymbol sym = (ClassSymbol) result.sym();
     for (Ident name : result.remaining()) {
       sym = Resolve.resolve(env, sym, sym, name);
+      if (sym == null) {
+        throw error(name.position(), ErrorKind.CANNOT_RESOLVE, name.value());
+      }
+    }
+    if (sym == null) {
+      return null;
     }
     AnnoInfo annoInfo = evaluateAnnotation(new AnnoInfo(source, sym, t, null));
     return new AnnotationValue(annoInfo.sym(), annoInfo.values());
