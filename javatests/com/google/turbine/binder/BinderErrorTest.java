@@ -26,7 +26,6 @@ import com.google.turbine.diag.TurbineError;
 import com.google.turbine.parse.Parser;
 import com.google.turbine.tree.Tree.CompUnit;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Optional;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -180,7 +179,7 @@ public class BinderErrorTest {
         {
           "<>:2: error: symbol not found java.util.List$NoSuch", //
           "import java.util.List.NoSuch;",
-          "       ^",
+          "                      ^",
           "<>:3: error: could not resolve NoSuch",
           "public class Test extends NoSuch {",
           "                          ^",
@@ -488,6 +487,88 @@ public class BinderErrorTest {
           "  ^",
         },
       },
+      {
+        {
+          "package p;", //
+          "import java.util.List.NoSuchAnno;",
+          "@NoSuchAnno",
+          "public class Test {",
+          "}",
+        },
+        {
+          "<>:2: error: symbol not found java.util.List$NoSuchAnno",
+          "import java.util.List.NoSuchAnno;",
+          "                      ^",
+          "<>:3: error: could not resolve NoSuchAnno",
+          "@NoSuchAnno",
+          " ^",
+        },
+      },
+      {
+        {
+          "package p;", //
+          "import java.lang.annotation.Retention;",
+          "import java.lang.annotation.RetentionPolicy;",
+          "@Retention(@RetentionPolicy.RUNTIME)",
+          "public @interface A {",
+          "}",
+        },
+        {
+          "<>:4: error: could not resolve RUNTIME",
+          "@Retention(@RetentionPolicy.RUNTIME)",
+          "                            ^",
+        },
+      },
+      {
+        {
+          "@interface Param {",
+          "  Class<?> type();",
+          "}",
+          "class Foo<T> {",
+          "  @Param(type = T.class)",
+          "  public void bar() {}",
+          "}",
+        },
+        {
+          "<>:5: error: unexpected type parameter T",
+          "  @Param(type = T.class)",
+          "                ^",
+        },
+      },
+      {
+        {
+          "class One {",
+          "  @interface A {", //
+          "    B[] b();",
+          "  }",
+          "  @interface B {}",
+          "}",
+          "@One.A(b = {@B})",
+          "class T {}",
+        },
+        {
+          "<>:7: error: could not resolve B", //
+          "@One.A(b = {@B})",
+          "             ^",
+        },
+      },
+      {
+        {
+          "class One {",
+          "  @interface A {", //
+          "    B[] b();",
+          "  }",
+          "  @interface B {}",
+          "}",
+          "@One.A(b = {@One.NoSuch})",
+          "class T {}",
+        },
+        {
+          "<>:7: error: could not resolve NoSuch", //
+          "@One.A(b = {@One.NoSuch})",
+          "                 ^",
+        },
+      }
     };
     return Arrays.asList((Object[][]) testCases);
   }
@@ -505,13 +586,13 @@ public class BinderErrorTest {
     try {
       Binder.bind(
               ImmutableList.of(parseLines(source)),
-              ClassPathBinder.bindClasspath(Collections.emptyList()),
+              ClassPathBinder.bindClasspath(ImmutableList.of()),
               TURBINE_BOOTCLASSPATH,
               /* moduleVersion=*/ Optional.empty())
           .units();
       fail(Joiner.on('\n').join(source));
     } catch (TurbineError e) {
-      assertThat(e.getMessage()).isEqualTo(lines(expected));
+      assertThat(e).hasMessageThat().isEqualTo(lines(expected));
     }
   }
 
