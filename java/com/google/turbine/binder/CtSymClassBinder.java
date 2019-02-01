@@ -16,10 +16,13 @@
 
 package com.google.turbine.binder;
 
+import static com.google.common.base.StandardSystemProperty.JAVA_HOME;
+
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
 import com.google.turbine.binder.bound.ModuleInfo;
+import com.google.turbine.binder.bytecode.BytecodeBinder;
 import com.google.turbine.binder.bytecode.BytecodeBoundClass;
 import com.google.turbine.binder.env.Env;
 import com.google.turbine.binder.env.SimpleEnv;
@@ -41,12 +44,13 @@ public class CtSymClassBinder {
 
   @Nullable
   public static ClassPath bind(String version) throws IOException {
-    Path javaHome = Paths.get(System.getProperty("java.home"));
+    Path javaHome = Paths.get(JAVA_HOME.value());
     Path ctSym = javaHome.resolve("lib/ct.sym");
     if (!Files.exists(ctSym)) {
       throw new IllegalStateException("lib/ct.sym does not exist in " + javaHome);
     }
     Map<ClassSymbol, BytecodeBoundClass> map = new HashMap<>();
+    Map<ModuleSymbol, ModuleInfo> modules = new HashMap<>();
     Env<ClassSymbol, BytecodeBoundClass> benv =
         new Env<ClassSymbol, BytecodeBoundClass>() {
           @Override
@@ -70,19 +74,21 @@ public class CtSymClassBinder {
       if (!ze.name().substring(0, idx).contains(version)) {
         continue;
       }
-      ClassSymbol sym = new ClassSymbol(name.substring(idx + 1, name.length() - ".sig".length()));
-      if (!map.containsKey(sym)) {
-        map.put(
-            sym, new BytecodeBoundClass(sym, toByteArrayOrDie(ze), benv, ctSym + "!" + ze.name()));
+      if (name.substring(name.lastIndexOf('/') + 1).equals("module-info.sig")) {
+        ModuleInfo moduleInfo = BytecodeBinder.bindModuleInfo(name, toByteArrayOrDie(ze));
+        modules.put(new ModuleSymbol(moduleInfo.name()), moduleInfo);
+        continue;
       }
+      ClassSymbol sym = new ClassSymbol(name.substring(idx + 1, name.length() - ".sig".length()));
+      map.putIfAbsent(
+          sym, new BytecodeBoundClass(sym, toByteArrayOrDie(ze), benv, ctSym + "!" + ze.name()));
     }
     if (map.isEmpty()) {
       // we didn't find any classes for the desired release
       return null;
     }
     SimpleEnv<ClassSymbol, BytecodeBoundClass> env = new SimpleEnv<>(ImmutableMap.copyOf(map));
-    // TODO(cushon): support ct.sym module-infos once they exist (JDK 10?)
-    Env<ModuleSymbol, ModuleInfo> moduleEnv = new SimpleEnv<>(ImmutableMap.of());
+    Env<ModuleSymbol, ModuleInfo> moduleEnv = new SimpleEnv<>(ImmutableMap.copyOf(modules));
     TopLevelIndex index = SimpleTopLevelIndex.of(env.asMap().keySet());
     return new ClassPath() {
       @Override

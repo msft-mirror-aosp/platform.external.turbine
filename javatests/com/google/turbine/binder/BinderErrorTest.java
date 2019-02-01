@@ -21,13 +21,12 @@ import static com.google.turbine.testing.TestClassPaths.TURBINE_BOOTCLASSPATH;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.turbine.diag.TurbineError;
 import com.google.turbine.parse.Parser;
 import com.google.turbine.tree.Tree.CompUnit;
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.Optional;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -59,11 +58,10 @@ public class BinderErrorTest {
           "class B extends A.NoSuch {",
           "}",
         },
-        // TODO(cushon): we'd prefer the caret at NoSuch instead of A
         {
           "<>:4: error: symbol not found a.A$NoSuch", //
           "class B extends A.NoSuch {",
-          "                ^",
+          "                  ^",
         }
       },
       {
@@ -84,7 +82,7 @@ public class BinderErrorTest {
           "@Anno(foo=100, bar=200) class Test {}",
         },
         {
-          "<>:2: error: could not resolve foo", //
+          "<>:2: error: could not resolve element foo() in Anno", //
           "@Anno(foo=100, bar=200) class Test {}",
           "      ^",
         },
@@ -95,7 +93,7 @@ public class BinderErrorTest {
           "@Anno(foo=100, bar=200) class Test {}",
         },
         {
-          "<>:2: error: could not resolve bar", //
+          "<>:2: error: could not resolve element bar() in Anno", //
           "@Anno(foo=100, bar=200) class Test {}",
           "               ^",
         },
@@ -149,7 +147,10 @@ public class BinderErrorTest {
           "<>:4: error: cycle in class hierarchy: p.OuterExtendsInner$Inner"
               + " -> p.OuterExtendsInner$Inner",
           "  public static class Inner extends Foo {}",
-          "                                    ^"
+          "                                    ^",
+          "<>:4: error: could not resolve Foo",
+          "  public static class Inner extends Foo {}",
+          "                                    ^",
         },
       },
       {
@@ -162,7 +163,10 @@ public class BinderErrorTest {
         {
           "<>:2: error: symbol not found java.lang.NoSuch", //
           "import java.lang.NoSuch;",
-          "       ^"
+          "       ^",
+          "<>:3: error: could not resolve NoSuch",
+          "public class Test extends NoSuch {",
+          "                          ^"
         },
       },
       {
@@ -175,7 +179,10 @@ public class BinderErrorTest {
         {
           "<>:2: error: symbol not found java.util.List$NoSuch", //
           "import java.util.List.NoSuch;",
-          "       ^"
+          "                      ^",
+          "<>:3: error: could not resolve NoSuch",
+          "public class Test extends NoSuch {",
+          "                          ^",
         },
       },
       {
@@ -288,7 +295,7 @@ public class BinderErrorTest {
         {
           "<>:2: error: symbol not found java.lang.Deprecated$NoSuch", //
           "  @Deprecated.NoSuch int x;",
-          "   ^",
+          "              ^",
         },
       },
       {
@@ -403,6 +410,165 @@ public class BinderErrorTest {
           "               ^",
         },
       },
+      {
+        {
+          "class Cycle extends Cycle {", //
+          "  NoSuch f;",
+          "}",
+        },
+        {
+          "<>:2: error: could not resolve NoSuch", //
+          "  NoSuch f;",
+          "  ^",
+        },
+      },
+      {
+        {
+          "@interface Anno { int foo() default 0; }", //
+          "@Anno(Foo.CONST)",
+          "class Foo {",
+          "  static final int CONST = 42;",
+          "}",
+        },
+        {
+          "<>:2: error: could not resolve element value() in Anno", //
+          "@Anno(Foo.CONST)",
+          "      ^",
+        },
+      },
+      {
+        {
+          "@interface Anno { int foo() default 0; }", //
+          "@Anno(foo = Foo.)",
+          "class Foo {}",
+        },
+        {
+          "<>:2: error: invalid annotation argument", //
+          "@Anno(foo = Foo.)",
+          "                ^",
+        },
+      },
+      {
+        {
+          "import java.util.Map;", //
+          "class Foo {",
+          "  Map.Entry.NoSuch<List> ys;",
+          "}",
+        },
+        {
+          "<>:3: error: symbol not found java.util.Map$Entry$NoSuch", //
+          "  Map.Entry.NoSuch<List> ys;",
+          "            ^",
+        },
+      },
+      {
+        {
+          "import java.util.List;", //
+          "class Foo {",
+          "  NoSuch<List> xs;",
+          "}",
+        },
+        {
+          "<>:3: error: could not resolve NoSuch", //
+          "  NoSuch<List> xs;",
+          "  ^",
+        },
+      },
+      {
+        {
+          "import java.util.List;", //
+          "class Foo {",
+          "  java.util.NoSuch<List> xs;",
+          "}",
+        },
+        {
+          "<>:3: error: could not resolve java.util.NoSuch", //
+          "  java.util.NoSuch<List> xs;",
+          "  ^",
+        },
+      },
+      {
+        {
+          "package p;", //
+          "import java.util.List.NoSuchAnno;",
+          "@NoSuchAnno",
+          "public class Test {",
+          "}",
+        },
+        {
+          "<>:2: error: symbol not found java.util.List$NoSuchAnno",
+          "import java.util.List.NoSuchAnno;",
+          "                      ^",
+          "<>:3: error: could not resolve NoSuchAnno",
+          "@NoSuchAnno",
+          " ^",
+        },
+      },
+      {
+        {
+          "package p;", //
+          "import java.lang.annotation.Retention;",
+          "import java.lang.annotation.RetentionPolicy;",
+          "@Retention(@RetentionPolicy.RUNTIME)",
+          "public @interface A {",
+          "}",
+        },
+        {
+          "<>:4: error: could not resolve RUNTIME",
+          "@Retention(@RetentionPolicy.RUNTIME)",
+          "                            ^",
+        },
+      },
+      {
+        {
+          "@interface Param {",
+          "  Class<?> type();",
+          "}",
+          "class Foo<T> {",
+          "  @Param(type = T.class)",
+          "  public void bar() {}",
+          "}",
+        },
+        {
+          "<>:5: error: unexpected type parameter T",
+          "  @Param(type = T.class)",
+          "                ^",
+        },
+      },
+      {
+        {
+          "class One {",
+          "  @interface A {", //
+          "    B[] b();",
+          "  }",
+          "  @interface B {}",
+          "}",
+          "@One.A(b = {@B})",
+          "class T {}",
+        },
+        {
+          "<>:7: error: could not resolve B", //
+          "@One.A(b = {@B})",
+          "             ^",
+        },
+      },
+      {
+        {
+          "class One {",
+          "  @interface A {", //
+          "    B[] b();",
+          "  }",
+          "  @interface B {}",
+          "}",
+          "@One.A(b = {@One.NoSuch})",
+          "class T {}",
+        },
+        {
+          "<>:7: error: could not resolve NoSuch", //
+          "@One.A(b = {@One.NoSuch})",
+          "                 ^",
+        },
+      }
     };
     return Arrays.asList((Object[][]) testCases);
   }
@@ -420,13 +586,13 @@ public class BinderErrorTest {
     try {
       Binder.bind(
               ImmutableList.of(parseLines(source)),
-              ClassPathBinder.bindClasspath(Collections.emptyList()),
+              ClassPathBinder.bindClasspath(ImmutableList.of()),
               TURBINE_BOOTCLASSPATH,
-              /* moduleVersion=*/ Optional.absent())
+              /* moduleVersion=*/ Optional.empty())
           .units();
-      fail();
+      fail(Joiner.on('\n').join(source));
     } catch (TurbineError e) {
-      assertThat(e.getMessage()).isEqualTo(lines(expected));
+      assertThat(e).hasMessageThat().isEqualTo(lines(expected));
     }
   }
 

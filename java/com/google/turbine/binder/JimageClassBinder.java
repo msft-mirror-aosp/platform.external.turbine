@@ -16,6 +16,8 @@
 
 package com.google.turbine.binder;
 
+import static com.google.common.base.StandardSystemProperty.JAVA_HOME;
+
 import com.google.common.base.Joiner;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
@@ -35,6 +37,7 @@ import com.google.turbine.binder.lookup.Scope;
 import com.google.turbine.binder.lookup.TopLevelIndex;
 import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.binder.sym.ModuleSymbol;
+import com.google.turbine.tree.Tree.Ident;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -78,7 +81,7 @@ public class JimageClassBinder {
 
   /** Returns a platform classpath for the given JDK's jimage file. */
   public static ClassPath bind(String javaHome) throws IOException {
-    if (javaHome.equals(System.getProperty("java.home"))) {
+    if (javaHome.equals(JAVA_HOME.value())) {
       return bindDefault();
     }
     FileSystem fileSystem =
@@ -112,12 +115,8 @@ public class JimageClassBinder {
       if (path == null) {
         return null;
       }
-      try {
-        path = path.resolve("module-info.class");
-        result = BytecodeBinder.bindModuleInfo(path.toString(), toByteArrayOrDie(path));
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
+      path = path.resolve("module-info.class");
+      result = BytecodeBinder.bindModuleInfo(path.toString(), toByteArrayOrDie(path));
       moduleMap.put(moduleName, result);
     }
     return result;
@@ -197,10 +196,15 @@ public class JimageClassBinder {
             // Find the longest prefix of the key that corresponds to a package name.
             // TODO(cushon): SimpleTopLevelIndex uses a prefix map for this, does it matter?
             Scope scope = null;
-            ImmutableList<String> names = lookupKey.simpleNames();
+            ImmutableList<Ident> names = lookupKey.simpleNames();
+            ImmutableList.Builder<String> flatNamesBuilder = ImmutableList.builder();
+            for (Ident name : names) {
+              flatNamesBuilder.add(name.value());
+            }
+            ImmutableList<String> flatNames = flatNamesBuilder.build();
             int idx = -1;
             for (int i = 1; i < names.size(); i++) {
-              Scope cand = lookupPackage(names.subList(0, i));
+              Scope cand = lookupPackage(flatNames.subList(0, i));
               if (cand != null) {
                 scope = cand;
                 idx = i;
@@ -227,7 +231,7 @@ public class JimageClassBinder {
         @Nullable
         @Override
         public LookupResult lookup(LookupKey lookupKey) {
-          ClassSymbol sym = packageClassesBySimpleName.get(packageName, lookupKey.first());
+          ClassSymbol sym = packageClassesBySimpleName.get(packageName, lookupKey.first().value());
           return sym != null ? new LookupResult(sym, lookupKey) : null;
         }
       };

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Google Inc. All Rights Reserved.
+ * Copyright 2018 Google Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,32 +14,19 @@
  * limitations under the License.
  */
 
-package com.google.turbine.binder.bound;
+package com.google.turbine.model;
 
-import com.google.turbine.model.Const;
-import com.google.turbine.type.Type;
-
-/** A class literal constant. */
-public class ClassValue extends Const {
-
-  private final Type type;
-
-  public ClassValue(Type type) {
-    this.type = type;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s.class", type);
-  }
-
-  @Override
-  public Kind kind() {
-    return Kind.CLASS_LITERAL;
-  }
-
-  /** The class name. */
-  public Type type() {
-    return type;
-  }
+/** Program locations where an annotation may appear. */
+public enum TurbineElementType {
+  ANNOTATION_TYPE,
+  CONSTRUCTOR,
+  FIELD,
+  LOCAL_VARIABLE,
+  METHOD,
+  MODULE,
+  PACKAGE,
+  PARAMETER,
+  TYPE,
+  TYPE_PARAMETER,
+  TYPE_USE
 }

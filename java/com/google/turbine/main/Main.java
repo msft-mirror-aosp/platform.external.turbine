@@ -16,11 +16,12 @@
 
 package com.google.turbine.main;
 
+import static com.google.common.base.StandardSystemProperty.JAVA_SPECIFICATION_VERSION;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.hash.Hashing;
+import com.google.common.io.MoreFiles;
 import com.google.turbine.binder.Binder;
 import com.google.turbine.binder.Binder.BindingResult;
 import com.google.turbine.binder.ClassPath;
@@ -30,6 +31,7 @@ import com.google.turbine.binder.JimageClassBinder;
 import com.google.turbine.deps.Dependencies;
 import com.google.turbine.deps.Transitive;
 import com.google.turbine.diag.SourceFile;
+import com.google.turbine.diag.TurbineError;
 import com.google.turbine.lower.Lower;
 import com.google.turbine.lower.Lower.Lowered;
 import com.google.turbine.options.TurbineOptions;
@@ -50,6 +52,7 @@ import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Optional;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -70,7 +73,17 @@ public class Main {
   static final Attributes.Name INJECTING_RULE_KIND = new Attributes.Name("Injecting-Rule-Kind");
 
   public static void main(String[] args) throws IOException {
-    compile(args);
+    boolean ok;
+    try {
+      ok = compile(args);
+    } catch (TurbineError | UsageException e) {
+      System.err.println(e.getMessage());
+      ok = false;
+    } catch (Throwable turbineCrash) {
+      turbineCrash.printStackTrace();
+      ok = false;
+    }
+    System.exit(ok ? 0 : 1);
   }
 
   public static boolean compile(String[] args) throws IOException {
@@ -79,9 +92,7 @@ public class Main {
   }
 
   public static boolean compile(TurbineOptions options) throws IOException {
-    if (!options.processors().isEmpty()) {
-      return false;
-    }
+    usage(options);
 
     ImmutableList<CompUnit> units = parseAll(options);
 
@@ -93,7 +104,7 @@ public class Main {
     ClassPath classpath = ClassPathBinder.bindClasspath(toPaths(reducedClasspath));
 
     BindingResult bound =
-        Binder.bind(units, classpath, bootclasspath, /* moduleVersion=*/ Optional.absent());
+        Binder.bind(units, classpath, bootclasspath, /* moduleVersion=*/ Optional.empty());
 
     // TODO(cushon): parallelize
     Lowered lowered = Lower.lowerAll(bound.units(), bound.modules(), bound.classPathEnv());
@@ -113,22 +124,37 @@ public class Main {
     return true;
   }
 
+  private static void usage(TurbineOptions options) {
+    if (!options.processors().isEmpty()) {
+      throw new UsageException("--processors is not supported");
+    }
+    if (options.sources().isEmpty() && options.sourceJars().isEmpty()) {
+      throw new UsageException("no sources were provided");
+    }
+    if (options.help()) {
+      throw new UsageException();
+    }
+    if (!options.output().isPresent()) {
+      throw new UsageException("--output is required");
+    }
+  }
+
   private static ClassPath bootclasspath(TurbineOptions options) throws IOException {
     // if both --release and --bootclasspath are specified, --release wins
     if (options.release().isPresent() && options.system().isPresent()) {
-      throw new IllegalArgumentException("expected at most one of --release and --system");
+      throw new UsageException("expected at most one of --release and --system");
     }
 
     if (options.release().isPresent()) {
       String release = options.release().get();
-      if (release.equals(System.getProperty("java.specification.version"))) {
+      if (release.equals(JAVA_SPECIFICATION_VERSION.value())) {
         // if --release matches the host JDK, use its jimage instead of ct.sym
         return JimageClassBinder.bindDefault();
       }
       // ... otherwise, search ct.sym for a matching release
       ClassPath bootclasspath = CtSymClassBinder.bind(release);
       if (bootclasspath == null) {
-        throw new IllegalArgumentException("not a supported release: " + release);
+        throw new UsageException("not a supported release: " + release);
       }
       return bootclasspath;
     }
@@ -148,7 +174,7 @@ public class Main {
     ImmutableList.Builder<CompUnit> units = ImmutableList.builder();
     for (String source : options.sources()) {
       Path path = Paths.get(source);
-      units.add(Parser.parse(new SourceFile(source, new String(Files.readAllBytes(path), UTF_8))));
+      units.add(Parser.parse(new SourceFile(source, MoreFiles.asCharSource(path, UTF_8).read())));
     }
     for (String sourceJar : options.sourceJars()) {
       for (Zip.Entry ze : new Zip.ZipIterable(Paths.get(sourceJar))) {
@@ -166,7 +192,7 @@ public class Main {
   private static void writeOutput(
       TurbineOptions options, Map<String, byte[]> lowered, Map<String, byte[]> transitive)
       throws IOException {
-    Path path = Paths.get(options.outputFile());
+    Path path = Paths.get(options.output().get());
     try (OutputStream os = Files.newOutputStream(path);
         BufferedOutputStream bos = new BufferedOutputStream(os, BUFFER_SIZE);
         JarOutputStream jos = new JarOutputStream(bos)) {

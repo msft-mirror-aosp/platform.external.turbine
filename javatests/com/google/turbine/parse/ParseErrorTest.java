@@ -40,7 +40,7 @@ public class ParseErrorTest {
       parser.expression();
       fail("expected parsing to fail");
     } catch (TurbineError e) {
-      assertThat(e.getMessage()).contains("invalid literal");
+      assertThat(e).hasMessageThat().contains("invalid literal");
     }
   }
 
@@ -54,7 +54,7 @@ public class ParseErrorTest {
       parser.expression();
       fail("expected parsing to fail");
     } catch (TurbineError e) {
-      assertThat(e.getMessage()).contains("invalid literal");
+      assertThat(e).hasMessageThat().contains("invalid literal");
     }
   }
 
@@ -65,7 +65,8 @@ public class ParseErrorTest {
       Parser.parse(input);
       fail("expected parsing to fail");
     } catch (TurbineError e) {
-      assertThat(e.getMessage())
+      assertThat(e)
+          .hasMessageThat()
           .isEqualTo(
               lines(
                   "<>:1: error: unexpected token: void",
@@ -81,7 +82,8 @@ public class ParseErrorTest {
       Parser.parse(input);
       fail("expected parsing to fail");
     } catch (TurbineError e) {
-      assertThat(e.getMessage())
+      assertThat(e)
+          .hasMessageThat()
           .isEqualTo(
               lines(
                   "<>:1: error: unexpected identifier 'clas'", //
@@ -97,7 +99,8 @@ public class ParseErrorTest {
       Parser.parse(input);
       fail("expected parsing to fail");
     } catch (TurbineError e) {
-      assertThat(e.getMessage())
+      assertThat(e)
+          .hasMessageThat()
           .isEqualTo(
               lines(
                   "<>:2: error: unexpected end of input", //
@@ -113,7 +116,8 @@ public class ParseErrorTest {
       Parser.parse(input);
       fail("expected parsing to fail");
     } catch (TurbineError e) {
-      assertThat(e.getMessage())
+      assertThat(e)
+          .hasMessageThat()
           .isEqualTo(
               lines(
                   "<>:1: error: invalid annotation argument", //
@@ -129,7 +133,8 @@ public class ParseErrorTest {
       Parser.parse(input);
       fail("expected parsing to fail");
     } catch (TurbineError e) {
-      assertThat(e.getMessage())
+      assertThat(e)
+          .hasMessageThat()
           .isEqualTo(
               lines(
                   "<>:1: error: unexpected end of input", //
@@ -145,12 +150,81 @@ public class ParseErrorTest {
       Parser.parse(input);
       fail("expected parsing to fail");
     } catch (TurbineError e) {
-      assertThat(e.getMessage())
+      assertThat(e)
+          .hasMessageThat()
           .isEqualTo(
               lines(
                   "<>:1: error: unexpected end of input", //
                   "class T { Object f = new Object() {",
                   "                                  ^"));
+    }
+  }
+
+  @Test
+  public void unterminatedString() {
+    String input = "class T { String s = \"hello\nworld\"; }";
+    try {
+      Parser.parse(input);
+      fail("expected parsing to fail");
+    } catch (TurbineError e) {
+      assertThat(e)
+          .hasMessageThat()
+          .isEqualTo(
+              lines(
+                  "<>:1: error: unterminated string literal", //
+                  "class T { String s = \"hello",
+                  "                           ^"));
+    }
+  }
+
+  @Test
+  public void emptyChar() {
+    String input = "class T { char c = ''; }";
+    try {
+      Parser.parse(input);
+      fail("expected parsing to fail");
+    } catch (TurbineError e) {
+      assertThat(e)
+          .hasMessageThat()
+          .isEqualTo(
+              lines(
+                  "<>:1: error: empty char literal", //
+                  "class T { char c = ''; }",
+                  "                    ^"));
+    }
+  }
+
+  @Test
+  public void unterminatedChar() {
+    String input = "class T { char c = '; }";
+    try {
+      Parser.parse(input);
+      fail("expected parsing to fail");
+    } catch (TurbineError e) {
+      assertThat(e)
+          .hasMessageThat()
+          .isEqualTo(
+              lines(
+                  "<>:1: error: unterminated char literal", //
+                  "class T { char c = '; }",
+                  "                     ^"));
+    }
+  }
+
+  @Test
+  public void unterminatedExpr() {
+    String input = "class T { String s = hello + world }";
+    try {
+      Parser.parse(input);
+      fail("expected parsing to fail");
+    } catch (TurbineError e) {
+      assertThat(e)
+          .hasMessageThat()
+          .isEqualTo(
+              lines(
+                  "<>:1: error: unterminated expression, expected ';' not found", //
+                  "class T { String s = hello + world }",
+                  "                     ^"));
     }
   }
 

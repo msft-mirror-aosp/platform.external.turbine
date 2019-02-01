@@ -23,9 +23,9 @@ import static java.util.stream.Collectors.toCollection;
 import static java.util.stream.Collectors.toList;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Optional;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
+import com.google.common.io.MoreFiles;
 import com.google.common.jimfs.Configuration;
 import com.google.common.jimfs.Jimfs;
 import com.google.turbine.binder.Binder;
@@ -60,6 +60,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaFileObject;
@@ -135,12 +136,10 @@ public class IntegrationTestSupport {
     if (!isDeprecated(n.visibleAnnotations)) {
       n.access &= ~Opcodes.ACC_DEPRECATED;
     }
-    n.methods
-        .stream()
+    n.methods.stream()
         .filter(m -> !isDeprecated(m.visibleAnnotations))
         .forEach(m -> m.access &= ~Opcodes.ACC_DEPRECATED);
-    n.fields
-        .stream()
+    n.fields.stream()
         .filter(f -> !isDeprecated(f.visibleAnnotations))
         .forEach(f -> f.access &= ~Opcodes.ACC_DEPRECATED);
   }
@@ -188,21 +187,18 @@ public class IntegrationTestSupport {
   /** Remove elements that are omitted by turbine, e.g. private and synthetic members. */
   private static void removeImplementation(ClassNode n) {
     n.innerClasses =
-        n.innerClasses
-            .stream()
+        n.innerClasses.stream()
             .filter(x -> (x.access & Opcodes.ACC_SYNTHETIC) == 0 && x.innerName != null)
             .collect(toList());
 
     n.methods =
-        n.methods
-            .stream()
+        n.methods.stream()
             .filter(x -> (x.access & (Opcodes.ACC_SYNTHETIC | Opcodes.ACC_PRIVATE)) == 0)
             .filter(x -> !x.name.equals("<clinit>"))
             .collect(toList());
 
     n.fields =
-        n.fields
-            .stream()
+        n.fields.stream()
             .filter(x -> (x.access & (Opcodes.ACC_SYNTHETIC | Opcodes.ACC_PRIVATE)) == 0)
             .collect(toList());
   }
@@ -344,14 +340,14 @@ public class IntegrationTestSupport {
     if (annos == null) {
       return;
     }
-    annos.stream().forEach(a -> collectTypesFromAnnotation(types, a));
+    annos.forEach(a -> collectTypesFromAnnotation(types, a));
   }
 
   private static void addTypesInAnnotations(Set<String> types, List<AnnotationNode> annos) {
     if (annos == null) {
       return;
     }
-    annos.stream().forEach(a -> collectTypesFromAnnotation(types, a));
+    annos.forEach(a -> collectTypesFromAnnotation(types, a));
   }
 
   private static void collectTypesFromAnnotation(Set<String> types, AnnotationNode a) {
@@ -404,7 +400,7 @@ public class IntegrationTestSupport {
     final Set<String> classes1 = classes;
     new SignatureReader(signature)
         .accept(
-            new SignatureVisitor(Opcodes.ASM6) {
+            new SignatureVisitor(Opcodes.ASM7) {
               private final Set<String> classes = classes1;
               // class signatures may contain type arguments that contain class signatures
               Deque<List<String>> pieces = new ArrayDeque<>();
@@ -431,7 +427,7 @@ public class IntegrationTestSupport {
   static Map<String, byte[]> runTurbine(Map<String, String> input, ImmutableList<Path> classpath)
       throws IOException {
     return runTurbine(
-        input, classpath, TURBINE_BOOTCLASSPATH, /* moduleVersion= */ Optional.absent());
+        input, classpath, TURBINE_BOOTCLASSPATH, /* moduleVersion= */ Optional.empty());
   }
 
   static Map<String, byte[]> runTurbine(
@@ -441,9 +437,7 @@ public class IntegrationTestSupport {
       Optional<String> moduleVersion)
       throws IOException {
     List<Tree.CompUnit> units =
-        input
-            .entrySet()
-            .stream()
+        input.entrySet().stream()
             .map(e -> new SourceFile(e.getKey(), e.getValue()))
             .map(Parser::parse)
             .collect(toList());
@@ -476,7 +470,7 @@ public class IntegrationTestSupport {
       if (path.getParent() != null) {
         Files.createDirectories(path.getParent());
       }
-      Files.write(path, entry.getValue().getBytes(UTF_8));
+      MoreFiles.asCharSink(path, UTF_8).write(entry.getValue());
       inputs.add(path);
     }
 

@@ -25,7 +25,6 @@ import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.turbine.binder.bound.AnnotationValue;
-import com.google.turbine.binder.bound.ClassValue;
 import com.google.turbine.binder.bound.EnumConstantValue;
 import com.google.turbine.binder.bound.ModuleInfo.ExportInfo;
 import com.google.turbine.binder.bound.ModuleInfo.OpenInfo;
@@ -34,6 +33,7 @@ import com.google.turbine.binder.bound.ModuleInfo.RequireInfo;
 import com.google.turbine.binder.bound.ModuleInfo.UseInfo;
 import com.google.turbine.binder.bound.SourceModuleInfo;
 import com.google.turbine.binder.bound.SourceTypeBoundClass;
+import com.google.turbine.binder.bound.TurbineClassValue;
 import com.google.turbine.binder.bound.TypeBoundClass;
 import com.google.turbine.binder.bound.TypeBoundClass.FieldInfo;
 import com.google.turbine.binder.bound.TypeBoundClass.MethodInfo;
@@ -65,19 +65,20 @@ import com.google.turbine.diag.TurbineError;
 import com.google.turbine.diag.TurbineError.ErrorKind;
 import com.google.turbine.model.Const;
 import com.google.turbine.model.TurbineFlag;
+import com.google.turbine.model.TurbineTyKind;
 import com.google.turbine.model.TurbineVisibility;
 import com.google.turbine.type.AnnoInfo;
 import com.google.turbine.type.Type;
 import com.google.turbine.type.Type.ArrayTy;
 import com.google.turbine.type.Type.ClassTy;
 import com.google.turbine.type.Type.ClassTy.SimpleClassTy;
+import com.google.turbine.type.Type.TyKind;
 import com.google.turbine.type.Type.TyVar;
 import com.google.turbine.type.Type.WildTy;
 import com.google.turbine.types.Erasure;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -236,7 +237,7 @@ public class Lower {
   private byte[] lower(SourceTypeBoundClass info, ClassSymbol sym, Set<ClassSymbol> symbols) {
     int access = classAccess(info);
     String name = sig.descriptor(sym);
-    String signature = sig.classSignature(info);
+    String signature = sig.classSignature(info, env);
     String superName = info.superclass() != null ? sig.descriptor(info.superclass()) : null;
     List<String> interfaces = new ArrayList<>();
     for (ClassSymbol i : info.interfaces()) {
@@ -371,7 +372,7 @@ public class Lower {
 
   private ClassFile.FieldInfo lowerField(FieldInfo f) {
     final String name = f.name();
-    Function<TyVarSymbol, TyVarInfo> tenv = new TyVarEnv(Collections.emptyMap());
+    Function<TyVarSymbol, TyVarInfo> tenv = new TyVarEnv(ImmutableMap.of());
     String desc = SigWriter.type(sig.signature(Erasure.erase(f.type(), tenv)));
     String signature = sig.fieldSignature(f.type());
 
@@ -541,8 +542,9 @@ public class Lower {
     switch (value.kind()) {
       case CLASS_LITERAL:
         {
-          ClassValue classValue = (ClassValue) value;
-          return new ElementValue.ConstClassValue(SigWriter.type(sig.signature(classValue.type())));
+          TurbineClassValue classValue = (TurbineClassValue) value;
+          return new ElementValue.ConstTurbineClassValue(
+              SigWriter.type(sig.signature(classValue.type())));
         }
       case ENUM_CONSTANT:
         {
@@ -672,15 +674,12 @@ public class Lower {
                 TypePath.root(),
                 info));
       }
-      if (p.superClassBound() != null) {
-        lowerTypeAnnotations(
-            result,
-            p.superClassBound(),
-            boundTargetType,
-            new TypeAnnotationInfo.TypeParameterBoundTarget(typeParameterIndex, 0));
-      }
-      int boundIndex = 1; // super class bound index is always 0; interface bounds start at 1
-      for (Type i : p.interfaceBounds()) {
+      int boundIndex = 0;
+      for (Type i : p.bound().bounds()) {
+        if (boundIndex == 0 && isInterface(i, env)) {
+          // super class bound index is always 0; interface bounds start at 1
+          boundIndex++;
+        }
         lowerTypeAnnotations(
             result,
             i,
@@ -689,6 +688,11 @@ public class Lower {
       }
       typeParameterIndex++;
     }
+  }
+
+  private boolean isInterface(Type type, Env<ClassSymbol, TypeBoundClass> env) {
+    return type.tyKind() == TyKind.CLASS_TY
+        && env.get(((ClassTy) type).sym()).kind() == TurbineTyKind.INTERFACE;
   }
 
   private void lowerTypeAnnotations(
@@ -781,7 +785,7 @@ public class Lower {
     }
 
     private void lowerClassTypeTypeAnnotations(ClassTy type, TypePath path) {
-      for (SimpleClassTy simple : type.classes) {
+      for (SimpleClassTy simple : type.classes()) {
         lowerTypeAnnotations(simple.annos(), path);
         int idx = 0;
         for (Type a : simple.targs()) {

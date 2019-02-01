@@ -17,6 +17,7 @@
 package com.google.turbine.options;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth8.assertThat;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -79,7 +80,7 @@ public class TurbineOptionsTest {
     TurbineOptions options =
         TurbineOptionsParser.parse(Iterables.concat(BASE_ARGS, Arrays.asList(lines)));
 
-    assertThat(options.outputFile()).isEqualTo("out.jar");
+    assertThat(options.output()).hasValue("out.jar");
     assertThat(options.sourceJars())
         .containsExactly("sources1.srcjar", "sources2.srcjar")
         .inOrder();
@@ -94,6 +95,7 @@ public class TurbineOptionsTest {
     assertThat(options.outputDeps()).hasValue("out.jdeps");
     assertThat(options.targetLabel()).hasValue("//java/com/google/test");
     assertThat(options.injectingRuleKind()).hasValue("foo_library");
+    assertThat(options.shouldReduceClassPath()).isTrue();
   }
 
   @Test
@@ -181,8 +183,8 @@ public class TurbineOptionsTest {
 
     TurbineOptions options = TurbineOptionsParser.parse(Arrays.asList(lines));
 
-    assertThat(options.targetLabel()).isAbsent();
-    assertThat(options.injectingRuleKind()).isAbsent();
+    assertThat(options.targetLabel()).isEmpty();
+    assertThat(options.injectingRuleKind()).isEmpty();
   }
 
   @Test
@@ -222,13 +224,9 @@ public class TurbineOptionsTest {
   }
 
   @Test
-  public void failIfMissingExpectedArgs() throws Exception {
-    try {
-      TurbineOptions.builder().build();
-      fail();
-    } catch (NullPointerException e) {
-      assertThat(e).hasMessage("output must not be null");
-    }
+  public void tolerateMissingOutput() throws Exception {
+    TurbineOptions options = TurbineOptions.builder().build();
+    assertThat(options.output()).isEmpty();
   }
 
   @Test
@@ -314,5 +312,42 @@ public class TurbineOptionsTest {
     assertThat(options.javacOpts())
         .containsExactly("--release", "8", "--release", "7", "--release")
         .inOrder();
+  }
+
+  @Test
+  public void shouldReduceClasspath() throws Exception {
+    {
+      TurbineOptions options =
+          TurbineOptionsParser.parse(
+              Iterables.concat(BASE_ARGS, ImmutableList.of("--reduce_classpath")));
+      assertThat(options.shouldReduceClassPath()).isTrue();
+    }
+
+    {
+      TurbineOptions options =
+          TurbineOptionsParser.parse(
+              Iterables.concat(BASE_ARGS, ImmutableList.of("--noreduce_classpath")));
+      assertThat(options.shouldReduceClassPath()).isFalse();
+    }
+  }
+
+  @Test
+  public void unescape() throws Exception {
+    String[] lines = {
+      "--sources", "Test.java", "'Foo$Bar.java'",
+    };
+    TurbineOptions options =
+        TurbineOptionsParser.parse(Iterables.concat(BASE_ARGS, Arrays.asList(lines)));
+    assertThat(options.sources()).containsExactly("Test.java", "Foo$Bar.java").inOrder();
+  }
+
+  @Test
+  public void invalidUnescape() throws Exception {
+    String[] lines = {"--sources", "'Foo$Bar.java"};
+    try {
+      TurbineOptionsParser.parse(Iterables.concat(BASE_ARGS, Arrays.asList(lines)));
+      fail();
+    } catch (IllegalArgumentException expected) {
+    }
   }
 }

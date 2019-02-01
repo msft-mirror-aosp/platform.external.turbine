@@ -16,18 +16,20 @@
 
 package com.google.turbine.lower;
 
+import static com.google.common.base.StandardSystemProperty.JAVA_CLASS_VERSION;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.stream.Collectors.toList;
 import static org.junit.Assert.assertEquals;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
+import com.google.turbine.binder.CtSymClassBinder;
 import com.google.turbine.binder.JimageClassBinder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Optional;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import org.junit.Rule;
@@ -60,7 +62,7 @@ public class ModuleIntegrationTest {
 
   @Test
   public void test() throws Exception {
-    if (Double.parseDouble(System.getProperty("java.class.version")) < 53) {
+    if (Double.parseDouble(JAVA_CLASS_VERSION.value()) < 53) {
       // only run on JDK 9 and later
       return;
     }
@@ -94,15 +96,19 @@ public class ModuleIntegrationTest {
 
     Map<String, byte[]> actual =
         IntegrationTestSupport.runTurbine(
-            input.sources, classpathJar, JimageClassBinder.bindDefault(), Optional.of("42"));
+            input.sources,
+            classpathJar,
+            Double.parseDouble(JAVA_CLASS_VERSION.value()) < 54
+                ? JimageClassBinder.bindDefault()
+                : CtSymClassBinder.bind("9"),
+            Optional.of("42"));
 
     assertEquals(dump(expected), dump(actual));
   }
 
   private String dump(Map<String, byte[]> map) throws Exception {
     return IntegrationTestSupport.dump(
-        map.entrySet()
-            .stream()
+        map.entrySet().stream()
             .filter(e -> e.getKey().endsWith("module-info"))
             .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue)));
   }
