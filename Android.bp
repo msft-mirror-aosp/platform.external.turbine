@@ -25,7 +25,7 @@ java_library_host {
     manifest: "manifest.txt",
     static_libs: [
         "error_prone_annotations",
-        "guava-21.0",
+        "guava",
     ],
 
     plugins: ["dagger2-auto-value"],
