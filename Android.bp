@@ -26,7 +26,6 @@ java_library_host {
     static_libs: [
         "error_prone_annotations",
         "guava-21.0",
-        "jsr305-3.0.1",
     ],
 
     plugins: ["dagger2-auto-value"],
