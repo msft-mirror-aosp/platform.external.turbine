@@ -20,6 +20,7 @@ java_library_host {
     srcs: [
         "java/**/*.java",
         "proto/**/*.proto",
+        "android-annotation-stubs/src/**/*.java",
     ],
 
     manifest: "manifest.txt",
@@ -28,8 +29,11 @@ java_library_host {
         "guava",
     ],
 
-    plugins: ["dagger2-auto-value"],
-    libs: ["dagger2-auto-value"],
+    plugins: ["auto_value_plugin"],
+    libs: [
+        "auto_value_annotations",
+        "auto_value_memoized_extension_annotations",
+    ],
 
     proto: {
         type: "full",
