@@ -18,6 +18,7 @@ package com.google.turbine.binder.bytecode;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Verify.verify;
+import static java.util.Objects.requireNonNull;
 
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
@@ -25,8 +26,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.turbine.binder.bound.AnnotationMetadata;
-import com.google.turbine.binder.bound.BoundClass;
-import com.google.turbine.binder.bound.HeaderBoundClass;
 import com.google.turbine.binder.bound.TypeBoundClass;
 import com.google.turbine.binder.env.Env;
 import com.google.turbine.binder.sym.ClassSymbol;
@@ -69,18 +68,18 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * resolved and canonicalized so there are no cycles. The laziness also minimizes the amount of work
  * done on the classpath.
  */
-public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBoundClass {
+public class BytecodeBoundClass implements TypeBoundClass {
 
   private final ClassSymbol sym;
   private final Env<ClassSymbol, BytecodeBoundClass> env;
   private final Supplier<ClassFile> classFile;
-  private final String jarFile;
+  private final @Nullable String jarFile;
 
   public BytecodeBoundClass(
       ClassSymbol sym,
       Supplier<byte[]> bytes,
       Env<ClassSymbol, BytecodeBoundClass> env,
-      String jarFile) {
+      @Nullable String jarFile) {
     this.sym = sym;
     this.env = env;
     this.jarFile = jarFile;
@@ -124,11 +123,11 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
     return kind.get();
   }
 
-  private final Supplier<ClassSymbol> owner =
+  private final Supplier<@Nullable ClassSymbol> owner =
       Suppliers.memoize(
-          new Supplier<ClassSymbol>() {
+          new Supplier<@Nullable ClassSymbol>() {
             @Override
-            public ClassSymbol get() {
+            public @Nullable ClassSymbol get() {
               for (ClassFile.InnerClass inner : classFile.get().innerClasses()) {
                 if (sym.binaryName().equals(inner.innerClass())) {
                   return new ClassSymbol(inner.outerClass());
@@ -188,11 +187,11 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
     return access.get();
   }
 
-  private final Supplier<ClassSig> sig =
+  private final Supplier<@Nullable ClassSig> sig =
       Suppliers.memoize(
-          new Supplier<ClassSig>() {
+          new Supplier<@Nullable ClassSig>() {
             @Override
-            public ClassSig get() {
+            public @Nullable ClassSig get() {
               String signature = classFile.get().signature();
               if (signature == null) {
                 return null;
@@ -223,11 +222,11 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
     return tyParams.get();
   }
 
-  private final Supplier<ClassSymbol> superclass =
+  private final Supplier<@Nullable ClassSymbol> superclass =
       Suppliers.memoize(
-          new Supplier<ClassSymbol>() {
+          new Supplier<@Nullable ClassSymbol>() {
             @Override
-            public ClassSymbol get() {
+            public @Nullable ClassSymbol get() {
               String superclass = classFile.get().superName();
               if (superclass == null) {
                 return null;
@@ -237,7 +236,7 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
           });
 
   @Override
-  public ClassSymbol superclass() {
+  public @Nullable ClassSymbol superclass() {
     return superclass.get();
   }
 
@@ -259,11 +258,11 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
     return interfaces.get();
   }
 
-  private final Supplier<ClassTy> superClassType =
+  private final Supplier<@Nullable ClassTy> superClassType =
       Suppliers.memoize(
-          new Supplier<ClassTy>() {
+          new Supplier<@Nullable ClassTy>() {
             @Override
-            public ClassTy get() {
+            public @Nullable ClassTy get() {
               if (superclass() == null) {
                 return null;
               }
@@ -276,7 +275,7 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
           });
 
   @Override
-  public ClassTy superClassType() {
+  public @Nullable ClassTy superClassType() {
     return superClassType.get();
   }
 
@@ -319,7 +318,8 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
               ImmutableMap.Builder<TyVarSymbol, TyVarInfo> tparams = ImmutableMap.builder();
               Function<String, TyVarSymbol> scope = makeScope(env, sym, typeParameters());
               for (Sig.TyParamSig p : sig.get().tyParams()) {
-                tparams.put(typeParameters().get(p.name()), bindTyParam(p, scope));
+                // typeParameters() is constructed to guarantee the requireNonNull call is safe.
+                tparams.put(requireNonNull(typeParameters().get(p.name())), bindTyParam(p, scope));
               }
               return tparams.build();
             }
@@ -380,14 +380,19 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
             public ImmutableList<MethodInfo> get() {
               ImmutableList.Builder<MethodInfo> methods = ImmutableList.builder();
               int idx = 0;
-              for (ClassFile.MethodInfo m : classFile.get().methods()) {
-                methods.add(bindMethod(idx++, m));
+              ClassFile cf = classFile.get();
+              for (ClassFile.MethodInfo m : cf.methods()) {
+                if (m.name().equals("<clinit>")) {
+                  // Don't bother reading class initializers, which we don't need
+                  continue;
+                }
+                methods.add(bindMethod(cf, idx++, m));
               }
               return methods.build();
             }
           });
 
-  private MethodInfo bindMethod(int methodIdx, ClassFile.MethodInfo m) {
+  private MethodInfo bindMethod(ClassFile classFile, int methodIdx, ClassFile.MethodInfo m) {
     MethodSymbol methodSymbol = new MethodSymbol(methodIdx, sym, m.name());
     Sig.MethodSig sig = new SigParser(firstNonNull(m.signature(), m.descriptor())).parseMethodSig();
 
@@ -405,7 +410,8 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
       ImmutableMap.Builder<TyVarSymbol, TyVarInfo> tparams = ImmutableMap.builder();
       Function<String, TyVarSymbol> scope = makeScope(env, sym, tyParams);
       for (Sig.TyParamSig p : sig.tyParams()) {
-        tparams.put(tyParams.get(p.name()), bindTyParam(p, scope));
+        // tyParams is constructed to guarantee the requireNonNull call is safe.
+        tparams.put(requireNonNull(tyParams.get(p.name())), bindTyParam(p, scope));
       }
       tyParamTypes = tparams.build();
     }
@@ -460,13 +466,19 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
 
     ImmutableList<AnnoInfo> annotations = BytecodeBinder.bindAnnotations(m.annotations());
 
+    int access = m.access();
+    if (((classFile.access() & TurbineFlag.ACC_INTERFACE) == TurbineFlag.ACC_INTERFACE)
+        && (access & (TurbineFlag.ACC_ABSTRACT | TurbineFlag.ACC_STATIC)) == 0) {
+      access |= TurbineFlag.ACC_DEFAULT;
+    }
+
     return new MethodInfo(
         methodSymbol,
         tyParamTypes,
         ret,
         formals.build(),
         exceptions.build(),
-        m.access(),
+        access,
         defaultValue,
         /* decl= */ null,
         annotations,
@@ -478,11 +490,11 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
     return methods.get();
   }
 
-  private final Supplier<AnnotationMetadata> annotationMetadata =
+  private final Supplier<@Nullable AnnotationMetadata> annotationMetadata =
       Suppliers.memoize(
-          new Supplier<AnnotationMetadata>() {
+          new Supplier<@Nullable AnnotationMetadata>() {
             @Override
-            public AnnotationMetadata get() {
+            public @Nullable AnnotationMetadata get() {
               if ((access() & TurbineFlag.ACC_ANNOTATION) != TurbineFlag.ACC_ANNOTATION) {
                 return null;
               }
@@ -508,8 +520,11 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
             }
           });
 
-  private static RetentionPolicy bindRetention(AnnotationInfo annotation) {
+  private static @Nullable RetentionPolicy bindRetention(AnnotationInfo annotation) {
     ElementValue val = annotation.elementValuePairs().get("value");
+    if (val == null) {
+      return null;
+    }
     if (val.kind() != Kind.ENUM) {
       return null;
     }
@@ -523,6 +538,7 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
   private static ImmutableSet<TurbineElementType> bindTarget(AnnotationInfo annotation) {
     ImmutableSet.Builder<TurbineElementType> result = ImmutableSet.builder();
     ElementValue val = annotation.elementValuePairs().get("value");
+    requireNonNull(val);
     switch (val.kind()) {
       case ARRAY:
         for (ElementValue element : ((ArrayValue) val).elements()) {
@@ -547,8 +563,11 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
     }
   }
 
-  private static ClassSymbol bindRepeatable(AnnotationInfo annotation) {
+  private static @Nullable ClassSymbol bindRepeatable(AnnotationInfo annotation) {
     ElementValue val = annotation.elementValuePairs().get("value");
+    if (val == null) {
+      return null;
+    }
     switch (val.kind()) {
       case CLASS:
         String className = ((ConstTurbineClassValue) val).className();
@@ -560,7 +579,7 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
   }
 
   @Override
-  public AnnotationMetadata annotationMetadata() {
+  public @Nullable AnnotationMetadata annotationMetadata() {
     return annotationMetadata.get();
   }
 
@@ -611,7 +630,11 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
   }
 
   /** The jar file the symbol was loaded from. */
-  public String jarFile() {
+  public @Nullable String jarFile() {
+    String transitiveJar = classFile.get().transitiveJar();
+    if (transitiveJar != null) {
+      return transitiveJar;
+    }
     return jarFile;
   }
 
