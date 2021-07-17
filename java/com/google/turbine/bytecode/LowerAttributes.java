@@ -29,7 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Lower information in {@link ClassFile} structures to attributes. */
-public class LowerAttributes {
+public final class LowerAttributes {
 
   /** Collects the {@link Attribute}s for a {@link ClassFile}. */
   static List<Attribute> classAttributes(ClassFile classfile) {
@@ -44,6 +44,9 @@ public class LowerAttributes {
     }
     if (classfile.module() != null) {
       attributes.add(new Attribute.Module(classfile.module()));
+    }
+    if (classfile.transitiveJar() != null) {
+      attributes.add(new Attribute.TurbineTransitiveJar(classfile.transitiveJar()));
     }
     return attributes;
   }
@@ -146,4 +149,6 @@ public class LowerAttributes {
       attributes.add(new Attribute.RuntimeInvisibleParameterAnnotations(invisibles));
     }
   }
+
+  private LowerAttributes() {}
 }
