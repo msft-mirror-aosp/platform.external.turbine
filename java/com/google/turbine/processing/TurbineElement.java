@@ -46,7 +46,7 @@ import com.google.turbine.diag.TurbineError.ErrorKind;
 import com.google.turbine.model.Const;
 import com.google.turbine.model.Const.ArrayInitValue;
 import com.google.turbine.model.TurbineFlag;
-import com.google.turbine.model.TurbineTyKind;
+import com.google.turbine.tree.Tree;
 import com.google.turbine.tree.Tree.MethDecl;
 import com.google.turbine.tree.Tree.TyDecl;
 import com.google.turbine.tree.Tree.VarDecl;
@@ -158,7 +158,8 @@ public abstract class TurbineElement implements Element {
         continue;
       }
       if (anno.sym().equals(metadata.repeatable())) {
-        ArrayInitValue arrayValue = (ArrayInitValue) anno.values().get("value");
+        // requireNonNull is safe because java.lang.annotation.Repeatable declares `value`.
+        ArrayInitValue arrayValue = (ArrayInitValue) requireNonNull(anno.values().get("value"));
         for (Const element : arrayValue.elements()) {
           result.add(
               TurbineAnnotationProxy.create(
@@ -262,11 +263,16 @@ public abstract class TurbineElement implements Element {
                       return factory.asTypeMirror(info.superClassType());
                     }
                     if (info instanceof SourceTypeBoundClass) {
-                      // support simple name for stuff that doesn't exist
+                      // support simple names for stuff that doesn't exist
                       TyDecl decl = ((SourceTypeBoundClass) info).decl();
                       if (decl.xtnds().isPresent()) {
-                        return factory.asTypeMirror(
-                            ErrorTy.create(decl.xtnds().get().name().value()));
+                        ArrayDeque<Tree.Ident> flat = new ArrayDeque<>();
+                        for (Tree.ClassTy curr = decl.xtnds().get();
+                            curr != null;
+                            curr = curr.base().orElse(null)) {
+                          flat.addFirst(curr.name());
+                        }
+                        return factory.asTypeMirror(ErrorTy.create(flat));
                       }
                     }
                     return factory.noType();
@@ -785,18 +791,12 @@ public abstract class TurbineElement implements Element {
 
     @Override
     public ElementKind getKind() {
-      return info().name().equals("<init>") ? ElementKind.CONSTRUCTOR : ElementKind.METHOD;
+      return sym.name().equals("<init>") ? ElementKind.CONSTRUCTOR : ElementKind.METHOD;
     }
 
     @Override
     public Set<Modifier> getModifiers() {
-      int access = info().access();
-      if (factory.getSymbol(info().sym().owner()).kind() == TurbineTyKind.INTERFACE) {
-        if ((access & (TurbineFlag.ACC_ABSTRACT | TurbineFlag.ACC_STATIC)) == 0) {
-          access |= TurbineFlag.ACC_DEFAULT;
-        }
-      }
-      return asModifierSet(ModifierOwner.METHOD, access);
+      return asModifierSet(ModifierOwner.METHOD, info().access());
     }
 
     @Override
