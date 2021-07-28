@@ -51,7 +51,7 @@ public interface TypeBoundClass extends HeaderBoundClass {
   ImmutableList<MethodInfo> methods();
 
   /**
-   * Annotation metadata, e.g. from {@link @java.lang.annotation.Target}, {@link
+   * Annotation metadata, e.g. from {@link java.lang.annotation.Target}, {@link
    * java.lang.annotation.Retention}, and {@link java.lang.annotation.Repeatable}.
    */
   AnnotationMetadata annotationMetadata();
@@ -227,6 +227,14 @@ public interface TypeBoundClass extends HeaderBoundClass {
     /** The default value of an annotation interface method. */
     public Const defaultValue() {
       return defaultValue;
+    }
+
+    /**
+     * Returns true for annotation members with a default value. The default value may not have been
+     * bound yet, in which case {@link #defaultValue} may still return {@code null}.
+     */
+    public boolean hasDefaultValue() {
+      return decl() != null ? decl().defaultValue().isPresent() : defaultValue() != null;
     }
 
     /** The declaration. */
