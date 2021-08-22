@@ -506,12 +506,15 @@ public class ConstExpressionParser {
         return term1;
       }
       eat();
-      if (op == TurbineOperatorKind.TERNARY) {
-        term1 = ternary(term1);
-      } else if (op == TurbineOperatorKind.ASSIGN) {
-        term1 = assign(term1, op);
-      } else {
-        term1 = new Tree.Binary(position, term1, expression(op.prec()), op);
+      switch (op) {
+        case TERNARY:
+          term1 = ternary(term1);
+          break;
+        case ASSIGN:
+          term1 = assign(term1, op);
+          break;
+        default:
+          term1 = new Tree.Binary(position, term1, expression(op.prec()), op);
       }
       if (term1 == null) {
         return null;
@@ -568,6 +571,7 @@ public class ConstExpressionParser {
       throw new AssertionError();
     }
     eat();
+    int pos = position;
     Tree.ConstVarName constVarName = (Tree.ConstVarName) qualIdent();
     if (constVarName == null) {
       return null;
@@ -577,10 +581,10 @@ public class ConstExpressionParser {
     if (token == Token.LPAREN) {
       eat();
       while (token != Token.RPAREN) {
-        int pos = position;
+        int argPos = position;
         Tree.Expression expression = expression();
         if (expression == null) {
-          throw TurbineError.format(lexer.source(), pos, ErrorKind.INVALID_ANNOTATION_ARGUMENT);
+          throw TurbineError.format(lexer.source(), argPos, ErrorKind.INVALID_ANNOTATION_ARGUMENT);
         }
         args.add(expression);
         if (token != Token.COMMA) {
@@ -592,11 +596,19 @@ public class ConstExpressionParser {
         eat();
       }
     }
-    return new Tree.AnnoExpr(position, new Tree.Anno(position, name, args.build()));
+    return new Tree.AnnoExpr(pos, new Tree.Anno(pos, name, args.build()));
   }
 
   @CheckReturnValue
   private TurbineError error(ErrorKind kind, Object... args) {
     return TurbineError.format(lexer.source(), lexer.position(), kind, args);
+  }
+
+  public int f() {
+    return helper(1, 2);
+  }
+
+  private int helper(int x, int y) {
+    return x + y;
   }
 }
