@@ -17,10 +17,8 @@
 package com.google.turbine.lower;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
-import static com.google.common.io.MoreFiles.getFileExtension;
 import static com.google.turbine.testing.TestClassPaths.TURBINE_BOOTCLASSPATH;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toCollection;
 import static java.util.stream.Collectors.toList;
@@ -84,7 +82,7 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeAnnotationNode;
 
 /** Support for bytecode diffing-integration tests. */
-public final class IntegrationTestSupport {
+public class IntegrationTestSupport {
 
   /**
    * Normalizes order of members, attributes, and constant pool entries, to allow diffing bytecode.
@@ -412,21 +410,20 @@ public final class IntegrationTestSupport {
     final Set<String> classes1 = classes;
     new SignatureReader(signature)
         .accept(
-            new SignatureVisitor(Opcodes.ASM9) {
+            new SignatureVisitor(Opcodes.ASM7) {
               private final Set<String> classes = classes1;
               // class signatures may contain type arguments that contain class signatures
               Deque<List<String>> pieces = new ArrayDeque<>();
 
               @Override
               public void visitInnerClassType(String name) {
-                pieces.element().add(name);
+                pieces.peek().add(name);
               }
 
               @Override
               public void visitClassType(String name) {
-                List<String> classType = new ArrayList<>();
-                classType.add(name);
-                pieces.push(classType);
+                pieces.push(new ArrayList<>());
+                pieces.peek().add(name);
               }
 
               @Override
@@ -513,7 +510,7 @@ public final class IntegrationTestSupport {
           @Override
           public FileVisitResult visitFile(Path path, BasicFileAttributes attrs)
               throws IOException {
-            if (getFileExtension(path).equals("class")) {
+            if (path.getFileName().toString().endsWith(".class")) {
               classes.add(path);
             }
             return FileVisitResult.CONTINUE;
@@ -554,9 +551,7 @@ public final class IntegrationTestSupport {
     fileManager.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, ImmutableList.of(out));
     fileManager.setLocationFromPaths(StandardLocation.CLASS_PATH, classpath);
     fileManager.setLocationFromPaths(StandardLocation.locationFor("MODULE_PATH"), classpath);
-    if (inputs.stream()
-            .filter(i -> requireNonNull(i.getFileName()).toString().equals("module-info.java"))
-            .count()
+    if (inputs.stream().filter(i -> i.getFileName().toString().equals("module-info.java")).count()
         > 1) {
       // multi-module mode
       fileManager.setLocationFromPaths(
@@ -583,7 +578,7 @@ public final class IntegrationTestSupport {
         na = na.substring(1);
       }
       sb.append(String.format("=== %s ===\n", na));
-      sb.append(AsmUtils.textify(compiled.get(key), /* skipDebug= */ true));
+      sb.append(AsmUtils.textify(compiled.get(key)));
     }
     return sb.toString();
   }
@@ -639,6 +634,4 @@ public final class IntegrationTestSupport {
       return new TestInput(sources, classes);
     }
   }
-
-  private IntegrationTestSupport() {}
 }

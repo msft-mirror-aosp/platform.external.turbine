@@ -19,8 +19,7 @@ package com.google.turbine.binder;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.turbine.testing.TestClassPaths.TURBINE_BOOTCLASSPATH;
-import static java.util.Objects.requireNonNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
@@ -85,16 +84,17 @@ public class BinderTest {
             new ClassSymbol("a/A$Inner2"),
             new ClassSymbol("b/B"));
 
-    SourceTypeBoundClass a = getBoundClass(bound, "a/A");
+    SourceTypeBoundClass a = bound.get(new ClassSymbol("a/A"));
     assertThat(a.superclass()).isEqualTo(new ClassSymbol("java/lang/Object"));
     assertThat(a.interfaces()).isEmpty();
 
-    assertThat(getBoundClass(bound, "a/A$Inner1").superclass()).isEqualTo(new ClassSymbol("b/B"));
+    assertThat(bound.get(new ClassSymbol("a/A$Inner1")).superclass())
+        .isEqualTo(new ClassSymbol("b/B"));
 
-    assertThat(getBoundClass(bound, "a/A$Inner2").superclass())
+    assertThat(bound.get(new ClassSymbol("a/A$Inner2")).superclass())
         .isEqualTo(new ClassSymbol("a/A$Inner1"));
 
-    SourceTypeBoundClass b = getBoundClass(bound, "b/B");
+    SourceTypeBoundClass b = bound.get(new ClassSymbol("b/B"));
     assertThat(b.superclass()).isEqualTo(new ClassSymbol("a/A"));
   }
 
@@ -129,12 +129,12 @@ public class BinderTest {
             new ClassSymbol("b/B"),
             new ClassSymbol("b/B$BInner"));
 
-    assertThat(getBoundClass(bound, "b/B").interfaces())
+    assertThat(bound.get(new ClassSymbol("b/B")).interfaces())
         .containsExactly(new ClassSymbol("com/i/I"));
 
-    assertThat(getBoundClass(bound, "b/B$BInner").superclass())
+    assertThat(bound.get(new ClassSymbol("b/B$BInner")).superclass())
         .isEqualTo(new ClassSymbol("com/i/I$IInner"));
-    assertThat(getBoundClass(bound, "b/B$BInner").interfaces()).isEmpty();
+    assertThat(bound.get(new ClassSymbol("b/B$BInner")).interfaces()).isEmpty();
   }
 
   @Test
@@ -161,7 +161,7 @@ public class BinderTest {
                 /* moduleVersion=*/ Optional.empty())
             .units();
 
-    assertThat(getBoundClass(bound, "other/Foo").superclass())
+    assertThat(bound.get(new ClassSymbol("other/Foo")).superclass())
         .isEqualTo(new ClassSymbol("com/test/Test$Inner"));
   }
 
@@ -182,16 +182,16 @@ public class BinderTest {
                 "  class Inner {}",
                 "}"));
 
-    TurbineError e =
-        assertThrows(
-            TurbineError.class,
-            () ->
-                Binder.bind(
-                    units,
-                    ClassPathBinder.bindClasspath(ImmutableList.of()),
-                    TURBINE_BOOTCLASSPATH,
-                    /* moduleVersion=*/ Optional.empty()));
-    assertThat(e).hasMessageThat().contains("cycle in class hierarchy: a.A -> b.B -> a.A");
+    try {
+      Binder.bind(
+          units,
+          ClassPathBinder.bindClasspath(ImmutableList.of()),
+          TURBINE_BOOTCLASSPATH,
+          /* moduleVersion=*/ Optional.empty());
+      fail();
+    } catch (TurbineError e) {
+      assertThat(e).hasMessageThat().contains("cycle in class hierarchy: a.A -> b.B -> a.A");
+    }
   }
 
   @Test
@@ -211,7 +211,7 @@ public class BinderTest {
                 /* moduleVersion=*/ Optional.empty())
             .units();
 
-    SourceTypeBoundClass a = getBoundClass(bound, "com/test/Annotation");
+    SourceTypeBoundClass a = bound.get(new ClassSymbol("com/test/Annotation"));
     assertThat(a.access())
         .isEqualTo(
             TurbineFlag.ACC_PUBLIC
@@ -240,7 +240,7 @@ public class BinderTest {
                 /* moduleVersion=*/ Optional.empty())
             .units();
 
-    SourceTypeBoundClass a = getBoundClass(bound, "a/A");
+    SourceTypeBoundClass a = bound.get(new ClassSymbol("a/A"));
     assertThat(a.interfaces()).containsExactly(new ClassSymbol("java/util/Map$Entry"));
   }
 
@@ -259,7 +259,7 @@ public class BinderTest {
     try (OutputStream os = Files.newOutputStream(libJar);
         JarOutputStream jos = new JarOutputStream(os)) {
       jos.putNextEntry(new JarEntry("B.class"));
-      jos.write(requireNonNull(lib.get("B")));
+      jos.write(lib.get("B"));
     }
 
     ImmutableList<Tree.CompUnit> units =
@@ -280,7 +280,7 @@ public class BinderTest {
                 /* moduleVersion=*/ Optional.empty())
             .units();
 
-    SourceTypeBoundClass a = getBoundClass(bound, "C$A");
+    SourceTypeBoundClass a = bound.get(new ClassSymbol("C$A"));
     assertThat(a.annotationMetadata().target()).containsExactly(TurbineElementType.TYPE_USE);
   }
 
@@ -306,7 +306,7 @@ public class BinderTest {
 
     assertThat(bound.keySet()).containsExactly(new ClassSymbol("a/A"));
 
-    SourceTypeBoundClass a = getBoundClass(bound, "a/A");
+    SourceTypeBoundClass a = bound.get(new ClassSymbol("a/A"));
     FieldInfo f = getOnlyElement(a.fields());
     assertThat(f.name()).isEqualTo("b");
     assertThat(f.value()).isNull();
@@ -314,11 +314,5 @@ public class BinderTest {
 
   private Tree.CompUnit parseLines(String... lines) {
     return Parser.parse(Joiner.on('\n').join(lines));
-  }
-
-  private static SourceTypeBoundClass getBoundClass(
-      Map<ClassSymbol, SourceTypeBoundClass> bound, String name) {
-    // requireNonNull is safe as long as we call this method with classes that exist in our sources.
-    return requireNonNull(bound.get(new ClassSymbol(name)));
   }
 }
