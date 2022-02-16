@@ -18,7 +18,6 @@ package com.google.turbine.bytecode;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
-import static java.util.Objects.requireNonNull;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Iterables;
@@ -35,8 +34,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.objectweb.asm.AnnotationVisitor;
-import org.objectweb.asm.Attribute;
-import org.objectweb.asm.ByteVector;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.ModuleVisitor;
@@ -139,7 +136,7 @@ public class ClassReaderTest {
     assertThat(annotation.typeName()).isEqualTo("Ljava/lang/annotation/Retention;");
     assertThat(annotation.elementValuePairs()).hasSize(1);
     assertThat(annotation.elementValuePairs()).containsKey("value");
-    ElementValue value = requireNonNull(annotation.elementValuePairs().get("value"));
+    ElementValue value = annotation.elementValuePairs().get("value");
     assertThat(value.kind()).isEqualTo(ElementValue.Kind.ENUM);
     ElementValue.EnumConstValue enumValue = (ElementValue.EnumConstValue) value;
     assertThat(enumValue.typeName()).isEqualTo("Ljava/lang/annotation/RetentionPolicy;");
@@ -337,29 +334,5 @@ public class ClassReaderTest {
     ProvideInfo p2 = module.provides().get(1);
     assertThat(p2.descriptor()).isEqualTo("p2");
     assertThat(p2.implDescriptors()).containsExactly("p2i1", "p2i2", "p2i3");
-  }
-
-  @Test
-  public void transitiveJar() {
-    ClassWriter cw = new ClassWriter(0);
-    cw.visit(
-        52,
-        Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_SUPER,
-        "Hello",
-        null,
-        "java/lang/Object",
-        null);
-    cw.visitAttribute(
-        new Attribute("TurbineTransitiveJar") {
-          @Override
-          protected ByteVector write(
-              ClassWriter classWriter, byte[] code, int codeLength, int maxStack, int maxLocals) {
-            ByteVector result = new ByteVector();
-            result.putShort(classWriter.newUTF8("path/to/transitive.jar"));
-            return result;
-          }
-        });
-    ClassFile cf = ClassReader.read(null, cw.toByteArray());
-    assertThat(cf.transitiveJar()).isEqualTo("path/to/transitive.jar");
   }
 }

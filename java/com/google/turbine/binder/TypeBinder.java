@@ -16,8 +16,6 @@
 
 package com.google.turbine.binder;
 
-import static java.util.Objects.requireNonNull;
-
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -56,7 +54,6 @@ import com.google.turbine.tree.TurbineModifier;
 import com.google.turbine.type.AnnoInfo;
 import com.google.turbine.type.Type;
 import com.google.turbine.type.Type.IntersectionTy;
-import com.google.turbine.types.Deannotate;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -397,8 +394,7 @@ public class TypeBinder {
       ImmutableList<Tree.TyParam> trees, CompoundScope scope, Map<String, TyVarSymbol> symbols) {
     ImmutableMap.Builder<TyVarSymbol, TyVarInfo> result = ImmutableMap.builder();
     for (Tree.TyParam tree : trees) {
-      // `symbols` is constructed to guarantee the requireNonNull call is safe.
-      TyVarSymbol sym = requireNonNull(symbols.get(tree.name().value()));
+      TyVarSymbol sym = symbols.get(tree.name().value());
       ImmutableList.Builder<Type> bounds = ImmutableList.builder();
       for (Tree bound : tree.bounds()) {
         bounds.add(bindTy(scope, bound));
@@ -496,9 +492,6 @@ public class TypeBinder {
                 & (TurbineFlag.ACC_DEFAULT | TurbineFlag.ACC_STATIC | TurbineFlag.ACC_SYNTHETIC))
             == 0) {
           access |= TurbineFlag.ACC_ABSTRACT;
-        }
-        if ((access & TurbineFlag.ACC_FINAL) == TurbineFlag.ACC_FINAL) {
-          log.error(t.position(), ErrorKind.UNEXPECTED_MODIFIER, TurbineModifier.FINAL);
         }
         break;
       case ENUM:
@@ -625,14 +618,7 @@ public class TypeBinder {
       case WILD_TY:
         return bindWildTy(scope, (Tree.WildTy) ty);
       default:
-        Type result = bindTy(scope, ty);
-        if (result.tyKind().equals(Type.TyKind.PRIM_TY)) {
-          // Omit type annotations when printing the type in the diagnostic, since they're
-          // irrelevant and could be invalid if there were deferred errors.
-          // TODO(cushon): consider ensuring this is done for all diagnostics that mention types
-          log.error(ty.position(), ErrorKind.UNEXPECTED_TYPE, Deannotate.deannotate(result));
-        }
-        return result;
+        return bindTy(scope, ty);
     }
   }
 
