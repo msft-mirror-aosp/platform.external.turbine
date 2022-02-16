@@ -18,7 +18,7 @@ package com.google.turbine.binder.lookup;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.turbine.binder.sym.ClassSymbol;
@@ -105,8 +105,15 @@ public class TopLevelIndexTest {
 
   @Test
   public void emptyLookup() {
-    LookupKey key = lookupKey(ImmutableList.of("java", "util", "List")).rest().rest();
-    assertThrows(NoSuchElementException.class, () -> key.rest());
+    LookupKey key = lookupKey(ImmutableList.of("java", "util", "List"));
+    key = key.rest();
+    key = key.rest();
+    try {
+      key.rest();
+      fail("expected exception");
+    } catch (NoSuchElementException e) {
+      // expected
+    }
   }
 
   private LookupKey lookupKey(ImmutableList<String> names) {
