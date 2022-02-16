@@ -18,7 +18,7 @@ package com.google.turbine.zip;
 
 import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.hash.Hashing;
@@ -161,7 +161,11 @@ public class ZipTest {
     }
     Files.write(path, "trailing garbage".getBytes(UTF_8), StandardOpenOption.APPEND);
 
-    ZipException e = assertThrows(ZipException.class, () -> actual(path));
-    assertThat(e).hasMessageThat().isEqualTo("zip file comment length was 33, expected 17");
+    try {
+      actual(path);
+      fail();
+    } catch (ZipException e) {
+      assertThat(e).hasMessageThat().isEqualTo("zip file comment length was 33, expected 17");
+    }
   }
 }

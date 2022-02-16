@@ -34,7 +34,7 @@ import com.google.turbine.bytecode.ClassFile.TypeAnnotationInfo.TypeParameterBou
 import com.google.turbine.bytecode.ClassFile.TypeAnnotationInfo.TypeParameterTarget;
 import com.google.turbine.bytecode.ClassFile.TypeAnnotationInfo.TypePath;
 import com.google.turbine.model.Const.Value;
-import java.util.Map;
+import java.util.Map.Entry;
 
 /** Writes an {@link AnnotationInfo} to a class file. */
 public class AnnotationWriter {
@@ -50,7 +50,7 @@ public class AnnotationWriter {
   public void writeAnnotation(AnnotationInfo annotation) {
     output.writeShort(pool.utf8(annotation.typeName()));
     output.writeShort(annotation.elementValuePairs().size());
-    for (Map.Entry<String, ElementValue> entry : annotation.elementValuePairs().entrySet()) {
+    for (Entry<String, ElementValue> entry : annotation.elementValuePairs().entrySet()) {
       output.writeShort(pool.utf8(entry.getKey()));
       writeElementValue(entry.getValue());
     }
