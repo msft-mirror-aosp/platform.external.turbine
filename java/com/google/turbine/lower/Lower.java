@@ -185,8 +185,7 @@ public class Lower {
             annotations,
             innerClasses.build(),
             /* typeAnnotations= */ ImmutableList.of(),
-            moduleInfo,
-            /* transitiveJar= */ null);
+            moduleInfo);
     symbols.addAll(sig.classes);
     return ClassWriter.writeClass(classfile);
   }
@@ -280,8 +279,7 @@ public class Lower {
             annotations,
             inners,
             typeAnnotations,
-            /* module= */ null,
-            /* transitiveJar= */ null);
+            /* module= */ null);
 
     symbols.addAll(sig.classes);
 

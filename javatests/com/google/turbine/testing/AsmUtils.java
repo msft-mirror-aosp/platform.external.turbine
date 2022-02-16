@@ -27,18 +27,14 @@ import org.objectweb.asm.util.TraceClassVisitor;
  * ASM-based test utilities, in their own class mostly to avoid namespace issues with e.g. {@link
  * com.google.turbine.bytecode.ClassReader}.
  */
-public final class AsmUtils {
-  public static String textify(byte[] bytes, boolean skipDebug) {
+public class AsmUtils {
+  public static String textify(byte[] bytes) {
     Printer textifier = new Textifier();
     StringWriter sw = new StringWriter();
     new ClassReader(bytes)
         .accept(
             new TraceClassVisitor(null, textifier, new PrintWriter(sw, true)),
-            ClassReader.SKIP_FRAMES
-                | ClassReader.SKIP_CODE
-                | (skipDebug ? ClassReader.SKIP_DEBUG : 0));
+            ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES | ClassReader.SKIP_CODE);
     return sw.toString();
   }
-
-  private AsmUtils() {}
 }

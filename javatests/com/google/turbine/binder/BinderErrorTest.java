@@ -18,7 +18,7 @@ package com.google.turbine.binder;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.turbine.testing.TestClassPaths.TURBINE_BOOTCLASSPATH;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
@@ -93,9 +93,6 @@ public class BinderErrorTest {
           "<>:2: error: could not resolve element foo() in Anno", //
           "@Anno(foo=100, bar=200) class Test {}",
           "      ^",
-          "<>:2: error: could not resolve element bar() in Anno", //
-          "@Anno(foo=100, bar=200) class Test {}",
-          "               ^",
         },
       },
       {
@@ -561,12 +558,9 @@ public class BinderErrorTest {
           "class T {}",
         },
         {
-          "<>:7: error: could not resolve B",
+          "<>:7: error: could not resolve B", //
           "@One.A(b = {@B})",
           "             ^",
-          "<>:7: error: could not evaluate constant expression",
-          "@One.A(b = {@B})",
-          "           ^",
         },
       },
       {
@@ -706,112 +700,6 @@ public class BinderErrorTest {
           "                                     ^",
         },
       },
-      {
-        {
-          "import java.util.List;",
-          "class T {", //
-          "  List<int> xs = new ArrayList<>();",
-          "}",
-        },
-        {
-          "<>:3: error: unexpected type int", //
-          "  List<int> xs = new ArrayList<>();",
-          "          ^",
-        },
-      },
-      {
-        {
-          "@interface A {",
-          "  int[] xs() default {};",
-          "}",
-          "@A(xs = Object.class)",
-          "class T {",
-          "}",
-        },
-        {
-          "<>:4: error: could not evaluate constant expression",
-          "@A(xs = Object.class)",
-          "        ^",
-        },
-      },
-      {
-        {
-          "package foobar;",
-          "import java.lang.annotation.Retention;",
-          "@Retention",
-          "@interface Test {}",
-        },
-        {
-          "<>:3: error: missing required annotation argument: value", //
-          "@Retention",
-          "^",
-        },
-      },
-      {
-        {
-          "interface Test {", //
-          "  static final void f() {}",
-          "}",
-        },
-        {
-          "<>:2: error: unexpected modifier: final", //
-          "  static final void f() {}",
-          "                    ^",
-        },
-      },
-      {
-        {
-          "package foobar;",
-          "import java.lang.annotation.Retention;",
-          "@Retention",
-          "@Retention",
-          "@interface Test {}",
-        },
-        {
-          "<>:3: error: missing required annotation argument: value",
-          "@Retention",
-          "^",
-          "<>:4: error: missing required annotation argument: value",
-          "@Retention",
-          "^",
-          "<>:3: error: java.lang.annotation.Retention is not @Repeatable",
-          "@Retention",
-          "^",
-        },
-      },
-      {
-        {
-          "import java.util.List;", //
-          "class Test {",
-          "  @interface A {}",
-          "  void f(List<@NoSuch int> xs) {}",
-          "}",
-        },
-        {
-          "<>:4: error: could not resolve NoSuch",
-          "  void f(List<@NoSuch int> xs) {}",
-          "              ^",
-          "<>:4: error: unexpected type int",
-          "  void f(List<@NoSuch int> xs) {}",
-          "                         ^",
-        },
-      },
-      {
-        {
-          "@interface B {}",
-          "@interface A {",
-          "  B[] value() default @B;",
-          "}",
-          "interface C {}",
-          "@A(value = @C)",
-          "class T {}",
-        },
-        {
-          "<>:6: error: C is not an annotation", //
-          "@A(value = @C)",
-          "            ^",
-        },
-      },
     };
     return Arrays.asList((Object[][]) testCases);
   }
@@ -826,18 +714,17 @@ public class BinderErrorTest {
 
   @Test
   public void test() throws Exception {
-    TurbineError e =
-        assertThrows(
-            Joiner.on('\n').join(source),
-            TurbineError.class,
-            () ->
-                Binder.bind(
-                        ImmutableList.of(parseLines(source)),
-                        ClassPathBinder.bindClasspath(ImmutableList.of()),
-                        TURBINE_BOOTCLASSPATH,
-                        /* moduleVersion=*/ Optional.empty())
-                    .units());
-    assertThat(e).hasMessageThat().isEqualTo(lines(expected));
+    try {
+      Binder.bind(
+              ImmutableList.of(parseLines(source)),
+              ClassPathBinder.bindClasspath(ImmutableList.of()),
+              TURBINE_BOOTCLASSPATH,
+              /* moduleVersion=*/ Optional.empty())
+          .units();
+      fail(Joiner.on('\n').join(source));
+    } catch (TurbineError e) {
+      assertThat(e).hasMessageThat().isEqualTo(lines(expected));
+    }
   }
 
   @SupportedAnnotationTypes("*")
@@ -857,23 +744,22 @@ public class BinderErrorTest {
   // exercise error reporting with annotation enabled, which should be identical
   @Test
   public void testWithProcessors() throws Exception {
-    TurbineError e =
-        assertThrows(
-            Joiner.on('\n').join(source),
-            TurbineError.class,
-            () ->
-                Binder.bind(
-                        ImmutableList.of(parseLines(source)),
-                        ClassPathBinder.bindClasspath(ImmutableList.of()),
-                        ProcessorInfo.create(
-                            ImmutableList.of(new HelloWorldProcessor()),
-                            /* loader= */ getClass().getClassLoader(),
-                            /* options= */ ImmutableMap.of(),
-                            SourceVersion.latestSupported()),
-                        TURBINE_BOOTCLASSPATH,
-                        /* moduleVersion=*/ Optional.empty())
-                    .units());
-    assertThat(e).hasMessageThat().isEqualTo(lines(expected));
+    try {
+      Binder.bind(
+              ImmutableList.of(parseLines(source)),
+              ClassPathBinder.bindClasspath(ImmutableList.of()),
+              ProcessorInfo.create(
+                  ImmutableList.of(new HelloWorldProcessor()),
+                  /* loader= */ getClass().getClassLoader(),
+                  /* options= */ ImmutableMap.of(),
+                  SourceVersion.latestSupported()),
+              TURBINE_BOOTCLASSPATH,
+              /* moduleVersion=*/ Optional.empty())
+          .units();
+      fail(Joiner.on('\n').join(source));
+    } catch (TurbineError e) {
+      assertThat(e).hasMessageThat().isEqualTo(lines(expected));
+    }
   }
 
   private static CompUnit parseLines(String... lines) {
