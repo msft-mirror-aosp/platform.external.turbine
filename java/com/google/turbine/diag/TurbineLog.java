@@ -18,6 +18,7 @@ package com.google.turbine.diag;
 
 import com.google.common.collect.ImmutableList;
 import com.google.turbine.diag.TurbineError.ErrorKind;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import javax.tools.Diagnostic;
@@ -25,24 +26,20 @@ import javax.tools.Diagnostic;
 /** A log that collects diagnostics. */
 public class TurbineLog {
 
-  private final Set<TurbineDiagnostic> diagnostics = new LinkedHashSet<>();
+  private final Set<TurbineDiagnostic> errors = new LinkedHashSet<>();
 
   public TurbineLogWithSource withSource(SourceFile source) {
     return new TurbineLogWithSource(source);
   }
 
-  public ImmutableList<TurbineDiagnostic> diagnostics() {
-    return ImmutableList.copyOf(diagnostics);
-  }
-
   public void maybeThrow() {
     if (anyErrors()) {
-      throw new TurbineError(diagnostics());
+      throw new TurbineError(ImmutableList.copyOf(errors));
     }
   }
 
-  public boolean anyErrors() {
-    for (TurbineDiagnostic error : diagnostics) {
+  private boolean anyErrors() {
+    for (TurbineDiagnostic error : errors) {
       if (error.severity().equals(Diagnostic.Kind.ERROR)) {
         return true;
       }
@@ -58,7 +55,7 @@ public class TurbineLog {
    * code generated in later processing rounds.
    */
   public boolean errorRaised() {
-    for (TurbineDiagnostic error : diagnostics) {
+    for (TurbineDiagnostic error : errors) {
       if (error.kind().equals(ErrorKind.PROC) && error.severity().equals(Diagnostic.Kind.ERROR)) {
         return true;
       }
@@ -68,12 +65,17 @@ public class TurbineLog {
 
   /** Reset the log between annotation processing rounds. */
   public void clear() {
-    diagnostics.removeIf(TurbineDiagnostic::isError);
+    Iterator<TurbineDiagnostic> it = errors.iterator();
+    while (it.hasNext()) {
+      if (it.next().severity().equals(Diagnostic.Kind.ERROR)) {
+        it.remove();
+      }
+    }
   }
 
   /** Reports an annotation processing diagnostic with no position information. */
   public void diagnostic(Diagnostic.Kind severity, String message) {
-    diagnostics.add(TurbineDiagnostic.format(severity, ErrorKind.PROC, message));
+    errors.add(TurbineDiagnostic.format(severity, ErrorKind.PROC, message));
   }
 
   /** A log for a specific source file. */
@@ -86,7 +88,7 @@ public class TurbineLog {
     }
 
     public void diagnostic(Diagnostic.Kind severity, int position, ErrorKind kind, Object... args) {
-      diagnostics.add(TurbineDiagnostic.format(severity, source, position, kind, args));
+      errors.add(TurbineDiagnostic.format(severity, source, position, kind, args));
     }
 
     public void error(int position, ErrorKind kind, Object... args) {

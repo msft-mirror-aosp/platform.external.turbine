@@ -38,15 +38,19 @@ import java.util.Map;
 /**
  * Canonicalizes all qualified types in a {@link SourceTypeBoundClass} using {@link Canonicalize}.
  */
-public final class CanonicalTypeBinder {
+public class CanonicalTypeBinder {
 
   static SourceTypeBoundClass bind(
       ClassSymbol sym, SourceTypeBoundClass base, Env<ClassSymbol, TypeBoundClass> env) {
-    Type superClassType = base.superClassType();
-    if (superClassType != null && superClassType.tyKind() == TyKind.CLASS_TY) {
+    ClassTy superClassType = null;
+    if (base.superClassType() != null && base.superClassType().tyKind() == TyKind.CLASS_TY) {
       superClassType =
           Canonicalize.canonicalizeClassTy(
-              base.source(), base.decl().position(), env, base.owner(), (ClassTy) superClassType);
+              base.source(),
+              base.decl().position(),
+              env,
+              base.owner(),
+              (ClassTy) base.superClassType());
     }
     ImmutableList.Builder<Type> interfaceTypes = ImmutableList.builder();
     for (Type i : base.interfaceTypes()) {
@@ -129,7 +133,9 @@ public final class CanonicalTypeBinder {
               base.defaultValue(),
               base.decl(),
               base.annotations(),
-              base.receiver() != null ? param(source, pos, env, sym, base.receiver()) : null));
+              base.receiver() != null
+                  ? param(source, base.decl().position(), env, sym, base.receiver())
+                  : null));
     }
     return result.build();
   }
@@ -175,6 +181,4 @@ public final class CanonicalTypeBinder {
     }
     return result.build();
   }
-
-  private CanonicalTypeBinder() {}
 }
