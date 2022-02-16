@@ -70,7 +70,7 @@ import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 
 /** Main entry point for the turbine CLI. */
-public final class Main {
+public class Main {
 
   private static final int BUFFER_SIZE = 65536;
 
@@ -256,10 +256,9 @@ public final class Main {
         ClassPathBinder.bindClasspath(toPaths(classpath)),
         Processing.initializeProcessors(
             /* javacopts= */ options.javacOpts(),
+            /* processorPath= */ options.processorPath(),
             /* processorNames= */ options.processors(),
-            Processing.processorLoader(
-                /* processorPath= */ options.processorPath(),
-                /* builtinProcessors= */ options.builtinProcessors())),
+            /* builtinProcessors= */ options.builtinProcessors()),
         bootclasspath,
         /* moduleVersion=*/ Optional.empty());
   }
@@ -333,14 +332,6 @@ public final class Main {
       return;
     }
     Path path = Paths.get(options.gensrcOutput().get());
-    if (Files.isDirectory(path)) {
-      for (SourceFile source : generatedSources.values()) {
-        Path to = path.resolve(source.path());
-        Files.createDirectories(to.getParent());
-        Files.write(to, source.source().getBytes(UTF_8));
-      }
-      return;
-    }
     try (OutputStream os = Files.newOutputStream(path);
         BufferedOutputStream bos = new BufferedOutputStream(os, BUFFER_SIZE);
         JarOutputStream jos = new JarOutputStream(bos)) {
@@ -358,14 +349,6 @@ public final class Main {
       return;
     }
     Path path = Paths.get(options.resourceOutput().get());
-    if (Files.isDirectory(path)) {
-      for (Map.Entry<String, byte[]> resource : generatedResources.entrySet()) {
-        Path to = path.resolve(resource.getKey());
-        Files.createDirectories(to.getParent());
-        Files.write(to, resource.getValue());
-      }
-      return;
-    }
     try (OutputStream os = Files.newOutputStream(path);
         BufferedOutputStream bos = new BufferedOutputStream(os, BUFFER_SIZE);
         JarOutputStream jos = new JarOutputStream(bos)) {
@@ -482,6 +465,4 @@ public final class Main {
     }
     return result.build();
   }
-
-  private Main() {}
 }

@@ -30,5 +30,5 @@ public interface HeaderBoundClass extends BoundClass {
   ImmutableList<ClassSymbol> interfaces();
 
   /** Declared type parameters. */
-  ImmutableMap<String, TyVarSymbol> typeParameters();
+  public ImmutableMap<String, TyVarSymbol> typeParameters();
 }

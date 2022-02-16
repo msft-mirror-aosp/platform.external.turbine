@@ -47,7 +47,6 @@ import com.google.turbine.model.Const.ConstCastError;
 import com.google.turbine.model.Const.Value;
 import com.google.turbine.model.TurbineConstantTypeKind;
 import com.google.turbine.model.TurbineFlag;
-import com.google.turbine.model.TurbineTyKind;
 import com.google.turbine.tree.Tree;
 import com.google.turbine.tree.Tree.ArrayInit;
 import com.google.turbine.tree.Tree.Binary;
@@ -127,13 +126,22 @@ public strictfp class ConstEvaluator {
           }
           switch (a.constantTypeKind()) {
             case CHAR:
+              return new Const.CharValue(((com.google.turbine.model.Const.CharValue) a).value());
             case INT:
+              return new Const.IntValue(((com.google.turbine.model.Const.IntValue) a).value());
             case LONG:
+              return new Const.LongValue(((com.google.turbine.model.Const.LongValue) a).value());
             case FLOAT:
+              return new Const.FloatValue(((com.google.turbine.model.Const.FloatValue) a).value());
             case DOUBLE:
+              return new Const.DoubleValue(
+                  ((com.google.turbine.model.Const.DoubleValue) a).value());
             case BOOLEAN:
+              return new Const.BooleanValue(
+                  ((com.google.turbine.model.Const.BooleanValue) a).value());
             case STRING:
-              return a;
+              return new Const.StringValue(
+                  ((com.google.turbine.model.Const.StringValue) a).value());
             case SHORT:
             case BYTE:
             case NULL:
@@ -310,24 +318,20 @@ public strictfp class ConstEvaluator {
   }
 
   /** Casts the value to the given type. */
-  private Const cast(int position, Type ty, Const value) {
+  static Const cast(Type ty, Const value) {
     checkNotNull(value);
     switch (ty.tyKind()) {
       case CLASS_TY:
       case TY_VAR:
         return value;
       case PRIM_TY:
-        if (!value.kind().equals(Const.Kind.PRIMITIVE)) {
-          throw error(position, ErrorKind.EXPRESSION_ERROR);
-        }
         return coerce((Const.Value) value, ((Type.PrimTy) ty).primkind());
       default:
         throw new AssertionError(ty.tyKind());
     }
   }
 
-  /** Casts the constant value to the given type. */
-  static Const.Value coerce(Const.Value value, TurbineConstantTypeKind kind) {
+  private static Const.Value coerce(Const.Value value, TurbineConstantTypeKind kind) {
     switch (kind) {
       case BOOLEAN:
         return value.asBoolean();
@@ -921,16 +925,12 @@ public strictfp class ConstEvaluator {
     if (info.sym() == null) {
       return info;
     }
+
+    Map<String, Type> template = new LinkedHashMap<>();
     TypeBoundClass annoClass = env.get(info.sym());
-    if (annoClass.kind() != TurbineTyKind.ANNOTATION) {
-      // we've already reported an error for non-annotation symbols used as annotations,
-      // skip error handling for annotation arguments
-      return info;
-    }
-    Map<String, MethodInfo> template = new LinkedHashMap<>();
     if (annoClass != null) {
       for (MethodInfo method : annoClass.methods()) {
-        template.put(method.name(), method);
+        template.put(method.name(), method.returnType());
       }
     }
 
@@ -947,28 +947,20 @@ public strictfp class ConstEvaluator {
         key = "value";
         expr = arg;
       }
-      MethodInfo methodInfo = template.remove(key);
-      if (methodInfo == null) {
-        log.error(
+      Type ty = template.get(key);
+      if (ty == null) {
+        throw error(
             arg.position(),
             ErrorKind.CANNOT_RESOLVE,
             String.format("element %s() in %s", key, info.sym()));
-        continue;
       }
-      Const value = evalAnnotationValue(expr, methodInfo.returnType());
+      Const value = evalAnnotationValue(expr, ty);
       if (value == null) {
-        log.error(expr.position(), ErrorKind.EXPRESSION_ERROR);
-        continue;
+        throw error(expr.position(), ErrorKind.EXPRESSION_ERROR);
       }
       Const existing = values.put(key, value);
       if (existing != null) {
-        log.error(arg.position(), ErrorKind.INVALID_ANNOTATION_ARGUMENT);
-        continue;
-      }
-    }
-    for (MethodInfo methodInfo : template.values()) {
-      if (!methodInfo.hasDefaultValue()) {
-        log.error(info.tree().position(), ErrorKind.MISSING_ANNOTATION_ARGUMENT, methodInfo.name());
+        throw error(arg.position(), ErrorKind.INVALID_ANNOTATION_ARGUMENT);
       }
     }
     return info.withValues(ImmutableMap.copyOf(values));
@@ -977,9 +969,8 @@ public strictfp class ConstEvaluator {
   private TurbineAnnotationValue evalAnno(Tree.Anno t) {
     LookupResult result = scope.lookup(new LookupKey(t.name()));
     if (result == null) {
-      log.error(
+      throw error(
           t.name().get(0).position(), ErrorKind.CANNOT_RESOLVE, Joiner.on(".").join(t.name()));
-      return null;
     }
     ClassSymbol sym = (ClassSymbol) result.sym();
     for (Ident name : result.remaining()) {
@@ -990,9 +981,6 @@ public strictfp class ConstEvaluator {
     }
     if (sym == null) {
       return null;
-    }
-    if (env.get(sym).kind() != TurbineTyKind.ANNOTATION) {
-      log.error(t.position(), ErrorKind.NOT_AN_ANNOTATION, sym);
     }
     AnnoInfo annoInfo = evaluateAnnotation(new AnnoInfo(source, sym, t, ImmutableMap.of()));
     return new TurbineAnnotationValue(annoInfo);
@@ -1016,8 +1004,7 @@ public strictfp class ConstEvaluator {
     }
     Const value = eval(tree);
     if (value == null) {
-      log.error(tree.position(), ErrorKind.EXPRESSION_ERROR);
-      return null;
+      throw error(tree.position(), ErrorKind.EXPRESSION_ERROR);
     }
     switch (ty.tyKind()) {
       case PRIM_TY:
@@ -1037,7 +1024,7 @@ public strictfp class ConstEvaluator {
                   : ImmutableList.of(value);
           ImmutableList.Builder<Const> coerced = ImmutableList.builder();
           for (Const element : elements) {
-            coerced.add(cast(tree.position(), elementType, element));
+            coerced.add(cast(elementType, element));
           }
           return new Const.ArrayInitValue(coerced.build());
         }
@@ -1056,7 +1043,7 @@ public strictfp class ConstEvaluator {
       if (value == null || value.kind() != Const.Kind.PRIMITIVE) {
         return null;
       }
-      return (Const.Value) cast(expression.position(), type, value);
+      return (Const.Value) cast(type, value);
     } catch (TurbineError error) {
       for (TurbineDiagnostic diagnostic : error.diagnostics()) {
         switch (diagnostic.kind()) {

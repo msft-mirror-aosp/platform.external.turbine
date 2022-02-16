@@ -18,7 +18,7 @@ package com.google.turbine.parse;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.turbine.diag.SourceFile;
 import com.google.turbine.diag.TurbineError;
@@ -57,11 +57,19 @@ public class UnicodeEscapePreprocessorTest {
 
   @Test
   public void abruptEnd() {
-    TurbineError e = assertThrows(TurbineError.class, () -> readAll("\\u00"));
-    assertThat(getOnlyElement(e.diagnostics()).kind()).isEqualTo(ErrorKind.UNEXPECTED_EOF);
+    try {
+      readAll("\\u00");
+      fail();
+    } catch (TurbineError e) {
+      assertThat(getOnlyElement(e.diagnostics()).kind()).isEqualTo(ErrorKind.UNEXPECTED_EOF);
+    }
 
-    e = assertThrows(TurbineError.class, () -> readAll("\\u"));
-    assertThat(getOnlyElement(e.diagnostics()).kind()).isEqualTo(ErrorKind.UNEXPECTED_EOF);
+    try {
+      readAll("\\u");
+      fail();
+    } catch (TurbineError e) {
+      assertThat(getOnlyElement(e.diagnostics()).kind()).isEqualTo(ErrorKind.UNEXPECTED_EOF);
+    }
   }
 
   @Test
@@ -71,16 +79,19 @@ public class UnicodeEscapePreprocessorTest {
 
   @Test
   public void invalidEscape() {
-    TurbineError e = assertThrows(TurbineError.class, () -> readAll("\\uUUUU"));
-    assertThat(getOnlyElement(e.diagnostics()).kind()).isEqualTo(ErrorKind.INVALID_UNICODE);
+    try {
+      readAll("\\uUUUU");
+      fail();
+    } catch (TurbineError e) {
+      assertThat(getOnlyElement(e.diagnostics()).kind()).isEqualTo(ErrorKind.INVALID_UNICODE);
+    }
   }
 
   private List<Character> readAll(String input) {
     UnicodeEscapePreprocessor reader = new UnicodeEscapePreprocessor(new SourceFile(null, input));
     List<Character> result = new ArrayList<>();
-    for (int ch = reader.next(); ch != UnicodeEscapePreprocessor.ASCII_SUB; ch = reader.next()) {
-      assertThat(Character.isBmpCodePoint(ch)).isTrue();
-      result.add((char) ch);
+    for (char ch = reader.next(); ch != UnicodeEscapePreprocessor.ASCII_SUB; ch = reader.next()) {
+      result.add(ch);
     }
     return result;
   }
