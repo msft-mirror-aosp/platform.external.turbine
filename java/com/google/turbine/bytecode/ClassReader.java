@@ -106,7 +106,6 @@ public class ClassReader {
     List<ClassFile.InnerClass> innerclasses = ImmutableList.of();
     ImmutableList.Builder<ClassFile.AnnotationInfo> annotations = ImmutableList.builder();
     ClassFile.ModuleInfo module = null;
-    String transitiveJar = null;
     int attributesCount = reader.u2();
     for (int j = 0; j < attributesCount; j++) {
       int attributeNameIndex = reader.u2();
@@ -125,9 +124,6 @@ public class ClassReader {
         case "Module":
           module = readModule(constantPool);
           break;
-        case "TurbineTransitiveJar":
-          transitiveJar = readTurbineTransitiveJar(constantPool);
-          break;
         default:
           reader.skip(reader.u4());
           break;
@@ -145,8 +141,7 @@ public class ClassReader {
         annotations.build(),
         innerclasses,
         ImmutableList.of(),
-        module,
-        transitiveJar);
+        module);
   }
 
   /** Reads a JVMS 4.7.9 Signature attribute. */
@@ -513,10 +508,5 @@ public class ClassReader {
               /* typeAnnotations= */ ImmutableList.of()));
     }
     return fields;
-  }
-
-  private String readTurbineTransitiveJar(ConstantPoolReader constantPool) {
-    reader.u4(); // length
-    return constantPool.utf8(reader.u2());
   }
 }
