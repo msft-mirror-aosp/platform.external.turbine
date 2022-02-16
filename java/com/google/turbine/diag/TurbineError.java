@@ -26,17 +26,15 @@ public class TurbineError extends Error {
 
   /** A diagnostic kind. */
   public enum ErrorKind {
-    UNEXPECTED_INPUT("unexpected input: %s"),
+    UNEXPECTED_INPUT("unexpected input: %c"),
     UNEXPECTED_IDENTIFIER("unexpected identifier '%s'"),
     UNEXPECTED_EOF("unexpected end of input"),
     UNTERMINATED_STRING("unterminated string literal"),
     UNTERMINATED_CHARACTER_LITERAL("unterminated char literal"),
-    UNPAIRED_SURROGATE("unpaired surrogate 0x%x"),
     UNTERMINATED_EXPRESSION("unterminated expression, expected ';' not found"),
     INVALID_UNICODE("illegal unicode escape"),
     EMPTY_CHARACTER_LITERAL("empty char literal"),
     EXPECTED_TOKEN("expected token %s"),
-    EXTENDS_AFTER_IMPLEMENTS("'extends' must come before 'implements'"),
     INVALID_LITERAL("invalid literal: %s"),
     UNEXPECTED_TYPE_PARAMETER("unexpected type parameter %s"),
     SYMBOL_NOT_FOUND("symbol not found %s"),
@@ -44,7 +42,6 @@ public class TurbineError extends Error {
     TYPE_PARAMETER_QUALIFIER("type parameter used as type qualifier"),
     UNEXPECTED_TOKEN("unexpected token: %s"),
     INVALID_ANNOTATION_ARGUMENT("invalid annotation argument"),
-    MISSING_ANNOTATION_ARGUMENT("missing required annotation argument: %s"),
     CANNOT_RESOLVE("could not resolve %s"),
     EXPRESSION_ERROR("could not evaluate constant expression"),
     OPERAND_TYPE("bad operand type %s"),
@@ -54,8 +51,6 @@ public class TurbineError extends Error {
     DUPLICATE_DECLARATION("duplicate declaration of %s"),
     BAD_MODULE_INFO("unexpected declaration found in module-info"),
     UNCLOSED_COMMENT("unclosed comment"),
-    UNEXPECTED_TYPE("unexpected type %s"),
-    UNEXPECTED_MODIFIER("unexpected modifier: %s"),
     PROC("%s");
 
     private final String message;

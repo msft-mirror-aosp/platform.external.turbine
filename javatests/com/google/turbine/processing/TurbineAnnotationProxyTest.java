@@ -18,11 +18,11 @@ package com.google.turbine.processing;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.turbine.testing.TestResources.getResourceBytes;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
+import com.google.common.io.ByteStreams;
 import com.google.common.primitives.Ints;
 import com.google.common.testing.EqualsTester;
 import com.google.turbine.binder.Binder;
@@ -39,6 +39,7 @@ import com.google.turbine.processing.TurbineElement.TurbineTypeElement;
 import com.google.turbine.testing.TestClassPaths;
 import com.google.turbine.tree.Tree.CompUnit;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Inherited;
 import java.lang.annotation.Repeatable;
@@ -160,13 +161,17 @@ public class TurbineAnnotationProxyTest {
 
     assertThat(a.b().value()).isEqualTo(-1);
     assertThat(a.e()).isEqualTo(ElementType.PACKAGE);
-    {
-      MirroredTypeException e = assertThrows(MirroredTypeException.class, () -> a.c());
+    try {
+      a.c();
+      fail();
+    } catch (MirroredTypeException e) {
       assertThat(e.getTypeMirror().getKind()).isEqualTo(TypeKind.DECLARED);
       assertThat(getQualifiedName(e.getTypeMirror())).contains("java.lang.String");
     }
-    {
-      MirroredTypesException e = assertThrows(MirroredTypesException.class, () -> a.cx());
+    try {
+      a.cx();
+      fail();
+    } catch (MirroredTypesException e) {
       assertThat(
               e.getTypeMirrors().stream().map(m -> getQualifiedName(m)).collect(toImmutableList()))
           .containsExactly("java.lang.Integer", "java.lang.Long");
@@ -203,7 +208,9 @@ public class TurbineAnnotationProxyTest {
   private static void addClass(JarOutputStream jos, Class<?> clazz) throws IOException {
     String entryPath = clazz.getName().replace('.', '/') + ".class";
     jos.putNextEntry(new JarEntry(entryPath));
-    jos.write(getResourceBytes(clazz, "/" + entryPath));
+    try (InputStream is = clazz.getClassLoader().getResourceAsStream(entryPath)) {
+      ByteStreams.copy(is, jos);
+    }
   }
 
   private static String getQualifiedName(TypeMirror typeMirror) {
