@@ -64,10 +64,6 @@ public class TurbineDiagnostic {
     return severity;
   }
 
-  boolean isError() {
-    return severity.equals(Diagnostic.Kind.ERROR);
-  }
-
   /** The diagnostic message. */
   public String diagnostic() {
     StringBuilder sb = new StringBuilder(path());
@@ -75,7 +71,7 @@ public class TurbineDiagnostic {
       sb.append(':').append(line());
     }
     sb.append(": error: ");
-    sb.append(message()).append(System.lineSeparator());
+    sb.append(message().trim()).append(System.lineSeparator());
     if (line() != -1 && column() != -1) {
       sb.append(CharMatcher.breakingWhitespace().trimTrailingFrom(source.lineMap().line(position)))
           .append(System.lineSeparator());
