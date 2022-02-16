@@ -19,7 +19,6 @@ package com.google.turbine.processing;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
 import static java.util.Comparator.comparing;
-import static java.util.Objects.requireNonNull;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
@@ -243,7 +242,7 @@ public class TurbineMessagerTest {
 
   private static String shortPath(Diagnostic<? extends JavaFileObject> d) {
     return d.getSource() != null
-        ? requireNonNull(Paths.get(d.getSource().getName()).getFileName()).toString()
+        ? Paths.get(d.getSource().getName()).getFileName().toString()
         : "<>";
   }
 }

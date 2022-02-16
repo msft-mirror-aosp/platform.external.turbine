@@ -246,14 +246,11 @@ public interface Type {
     @Override
     public final String toString() {
       StringBuilder sb = new StringBuilder();
-      sb.append(elementType());
-      if (!annos().isEmpty()) {
+      for (AnnoInfo anno : annos()) {
+        sb.append(anno);
         sb.append(' ');
-        for (AnnoInfo anno : annos()) {
-          sb.append(anno);
-          sb.append(' ');
-        }
       }
+      sb.append(elementType());
       sb.append("[]");
       return sb.toString();
     }

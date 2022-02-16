@@ -519,15 +519,7 @@ public class Parser {
         interfaces.add(classty());
       } while (maybe(Token.COMMA));
     }
-    switch (token) {
-      case LBRACE:
-        next();
-        break;
-      case EXTENDS:
-        throw error(ErrorKind.EXTENDS_AFTER_IMPLEMENTS);
-      default:
-        throw error(ErrorKind.EXPECTED_TOKEN, Token.LBRACE);
-    }
+    eat(Token.LBRACE);
     ImmutableList<Tree> members = classMembers();
     eat(Token.RBRACE);
     return new TyDecl(
@@ -756,9 +748,7 @@ public class Parser {
           }
           if (token == Token.DOT) {
             next();
-            if (!result.kind().equals(Kind.CLASS_TY)) {
-              throw error(token);
-            }
+            // TODO(cushon): is this cast OK?
             result = classty((ClassTy) result);
           }
           result = maybeDims(maybeAnnos(), result);
