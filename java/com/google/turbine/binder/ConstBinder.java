@@ -16,8 +16,6 @@
 
 package com.google.turbine.binder;
 
-import static java.util.Objects.requireNonNull;
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -198,9 +196,6 @@ public class ConstBinder {
 
   private static RetentionPolicy bindRetention(AnnoInfo annotation) {
     Const value = annotation.values().get("value");
-    if (value == null) {
-      return null;
-    }
     if (value.kind() != Kind.ENUM_CONSTANT) {
       return null;
     }
@@ -213,8 +208,7 @@ public class ConstBinder {
 
   private static ImmutableSet<TurbineElementType> bindTarget(AnnoInfo annotation) {
     ImmutableSet.Builder<TurbineElementType> result = ImmutableSet.builder();
-    // requireNonNull is safe because java.lang.annotation.Target declares `value`.
-    Const val = requireNonNull(annotation.values().get("value"));
+    Const val = annotation.values().get("value");
     switch (val.kind()) {
       case ARRAY:
         for (Const element : ((ArrayInitValue) val).elements()) {
@@ -233,8 +227,7 @@ public class ConstBinder {
   }
 
   private static ClassSymbol bindRepeatable(AnnoInfo annotation) {
-    // requireNonNull is safe because java.lang.annotation.Repeatable declares `value`.
-    Const value = requireNonNull(annotation.values().get("value"));
+    Const value = annotation.values().get("value");
     if (value.kind() != Kind.CLASS_LITERAL) {
       return null;
     }
@@ -275,12 +268,11 @@ public class ConstBinder {
     if ((base.access() & TurbineFlag.ACC_FINAL) == 0) {
       return null;
     }
-    Type type = base.type();
-    switch (type.tyKind()) {
+    switch (base.type().tyKind()) {
       case PRIM_TY:
         break;
       case CLASS_TY:
-        if (((Type.ClassTy) type).sym().equals(ClassSymbol.STRING)) {
+        if (((Type.ClassTy) base.type()).sym().equals(ClassSymbol.STRING)) {
           break;
         }
         // falls through
@@ -288,11 +280,8 @@ public class ConstBinder {
         return null;
     }
     Value value = constantEnv.get(base.sym());
-    if (value == null) {
-      return null;
-    }
-    if (type.tyKind().equals(TyKind.PRIM_TY)) {
-      value = ConstEvaluator.coerce(value, ((Type.PrimTy) type).primkind());
+    if (value != null) {
+      value = (Value) ConstEvaluator.cast(base.type(), value);
     }
     return value;
   }

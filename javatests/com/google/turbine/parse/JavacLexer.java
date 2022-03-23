@@ -27,7 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** A javac-based reference lexer. */
-public final class JavacLexer {
+public class JavacLexer {
 
   static List<String> javacLex(final String input) {
     Context context = new Context();
@@ -283,6 +283,4 @@ public final class JavacLexer {
     }
     return token.kind.toString();
   }
-
-  private JavacLexer() {}
 }
