@@ -19,6 +19,7 @@ package com.google.turbine.types;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.turbine.binder.bound.SourceTypeBoundClass;
 import com.google.turbine.binder.bound.TypeBoundClass.TyVarInfo;
 import com.google.turbine.binder.sym.TyVarSymbol;
 import com.google.turbine.type.Type;
@@ -31,8 +32,8 @@ import com.google.turbine.type.Type.TyVar;
 import com.google.turbine.type.Type.WildTy;
 
 /** Generic type erasure. */
-public final class Erasure {
-  public static Type erase(Type ty, Function<TyVarSymbol, TyVarInfo> tenv) {
+public class Erasure {
+  public static Type erase(Type ty, Function<TyVarSymbol, SourceTypeBoundClass.TyVarInfo> tenv) {
     switch (ty.tyKind()) {
       case CLASS_TY:
         return eraseClassTy((Type.ClassTy) ty);
@@ -69,12 +70,14 @@ public final class Erasure {
     return ty.bounds().isEmpty() ? ClassTy.OBJECT : erase(ty.bounds().get(0), tenv);
   }
 
-  private static Type eraseTyVar(TyVar ty, Function<TyVarSymbol, TyVarInfo> tenv) {
-    TyVarInfo info = tenv.apply(ty.sym());
+  private static Type eraseTyVar(
+      TyVar ty, Function<TyVarSymbol, SourceTypeBoundClass.TyVarInfo> tenv) {
+    SourceTypeBoundClass.TyVarInfo info = tenv.apply(ty.sym());
     return erase(info.upperBound(), tenv);
   }
 
-  private static Type.ArrayTy eraseArrayTy(Type.ArrayTy ty, Function<TyVarSymbol, TyVarInfo> tenv) {
+  private static Type.ArrayTy eraseArrayTy(
+      Type.ArrayTy ty, Function<TyVarSymbol, SourceTypeBoundClass.TyVarInfo> tenv) {
     return ArrayTy.create(erase(ty.elementType(), tenv), ty.annos());
   }
 
@@ -109,6 +112,4 @@ public final class Erasure {
         erase(ty.parameters(), tenv),
         erase(ty.thrown(), tenv));
   }
-
-  private Erasure() {}
 }

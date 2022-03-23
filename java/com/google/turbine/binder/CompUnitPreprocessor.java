@@ -45,7 +45,7 @@ import java.util.Set;
  * Processes compilation units before binding, creating symbols for type declarations and desugaring
  * access modifiers.
  */
-public final class CompUnitPreprocessor {
+public class CompUnitPreprocessor {
 
   /** A pre-processed compilation unit. */
   public static class PreprocessedCompUnit {
@@ -222,6 +222,4 @@ public final class CompUnitPreprocessor {
         TurbineTyKind.INTERFACE,
         /* javadoc= */ null);
   }
-
-  private CompUnitPreprocessor() {}
 }
