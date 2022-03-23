@@ -54,7 +54,6 @@ import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.binder.sym.FieldSymbol;
 import com.google.turbine.binder.sym.ModuleSymbol;
 import com.google.turbine.diag.SourceFile;
-import com.google.turbine.diag.TurbineDiagnostic;
 import com.google.turbine.diag.TurbineError;
 import com.google.turbine.diag.TurbineError.ErrorKind;
 import com.google.turbine.diag.TurbineLog;
@@ -69,7 +68,7 @@ import java.util.Optional;
 import javax.annotation.processing.Processor;
 
 /** The entry point for analysis. */
-public final class Binder {
+public class Binder {
 
   /** Binds symbols and types to the given compilation units. */
   public static BindingResult bind(
@@ -88,28 +87,19 @@ public final class Binder {
       ClassPath bootclasspath,
       Optional<String> moduleVersion) {
     TurbineLog log = new TurbineLog();
-    BindingResult br;
-    try {
+    BindingResult br =
+        bind(
+            log,
+            units,
+            /* generatedSources= */ ImmutableMap.of(),
+            /* generatedClasses= */ ImmutableMap.of(),
+            classpath,
+            bootclasspath,
+            moduleVersion);
+    if (!processorInfo.processors().isEmpty() && !units.isEmpty()) {
       br =
-          bind(
-              log,
-              units,
-              /* generatedSources= */ ImmutableMap.of(),
-              /* generatedClasses= */ ImmutableMap.of(),
-              classpath,
-              bootclasspath,
-              moduleVersion);
-      if (!processorInfo.processors().isEmpty() && !units.isEmpty()) {
-        br =
-            Processing.process(
-                log, units, classpath, processorInfo, bootclasspath, br, moduleVersion);
-      }
-    } catch (TurbineError turbineError) {
-      throw new TurbineError(
-          ImmutableList.<TurbineDiagnostic>builder()
-              .addAll(log.diagnostics())
-              .addAll(turbineError.diagnostics())
-              .build());
+          Processing.process(
+              log, units, classpath, processorInfo, bootclasspath, br, moduleVersion);
     }
     log.maybeThrow();
     return br;
@@ -550,6 +540,4 @@ public final class Binder {
           units, modules, classPathEnv, tli, generatedSources, generatedClasses, statistics);
     }
   }
-
-  private Binder() {}
 }

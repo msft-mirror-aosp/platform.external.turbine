@@ -18,7 +18,6 @@ package com.google.turbine.options;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth8.assertThat;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -284,23 +283,23 @@ public class TurbineOptionsTest {
 
   @Test
   public void unknownOption() throws Exception {
-    IllegalArgumentException e =
-        assertThrows(
-            IllegalArgumentException.class,
-            () ->
-                TurbineOptionsParser.parse(Iterables.concat(BASE_ARGS, Arrays.asList("--nosuch"))));
-    assertThat(e).hasMessageThat().contains("unknown option");
+    try {
+      TurbineOptionsParser.parse(Iterables.concat(BASE_ARGS, Arrays.asList("--nosuch")));
+      fail();
+    } catch (IllegalArgumentException e) {
+      assertThat(e).hasMessageThat().contains("unknown option");
+    }
   }
 
   @Test
   public void unterminatedJavacopts() throws Exception {
-    IllegalArgumentException e =
-        assertThrows(
-            IllegalArgumentException.class,
-            () ->
-                TurbineOptionsParser.parse(
-                    Iterables.concat(BASE_ARGS, Arrays.asList("--javacopts", "--release", "8"))));
-    assertThat(e).hasMessageThat().contains("javacopts should be terminated by `--`");
+    try {
+      TurbineOptionsParser.parse(
+          Iterables.concat(BASE_ARGS, Arrays.asList("--javacopts", "--release", "8")));
+      fail();
+    } catch (IllegalArgumentException e) {
+      assertThat(e).hasMessageThat().contains("javacopts should be terminated by `--`");
+    }
   }
 
   @Test
@@ -349,9 +348,11 @@ public class TurbineOptionsTest {
   @Test
   public void invalidUnescape() throws Exception {
     String[] lines = {"--sources", "'Foo$Bar.java"};
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> TurbineOptionsParser.parse(Iterables.concat(BASE_ARGS, Arrays.asList(lines))));
+    try {
+      TurbineOptionsParser.parse(Iterables.concat(BASE_ARGS, Arrays.asList(lines)));
+      fail();
+    } catch (IllegalArgumentException expected) {
+    }
   }
 
   @Test
@@ -371,38 +372,5 @@ public class TurbineOptionsTest {
                   BASE_ARGS, ImmutableList.of("--reduce_classpath_mode", mode.name())));
       assertThat(options.reducedClasspathMode()).isEqualTo(mode);
     }
-  }
-
-  @Test
-  public void javaBuilderCompatibility() throws Exception {
-    TurbineOptions options =
-        TurbineOptionsParser.parse(
-            Iterables.concat(
-                BASE_ARGS,
-                ImmutableList.of(
-                    "--output_deps_proto",
-                    "output_deps.proto",
-                    "--generated_sources_output",
-                    "generated_sources.jar",
-                    "--experimental_fix_deps_tool",
-                    "ignored",
-                    "--strict_java_deps",
-                    "ignored",
-                    "--native_header_output",
-                    "ignored",
-                    "--compress_jar")));
-    assertThat(options.outputDeps()).hasValue("output_deps.proto");
-    assertThat(options.gensrcOutput()).hasValue("generated_sources.jar");
-  }
-
-  @Test
-  public void requiredValue() throws Exception {
-    IllegalArgumentException e =
-        assertThrows(
-            IllegalArgumentException.class,
-            () ->
-                TurbineOptionsParser.parse(
-                    Iterables.concat(BASE_ARGS, ImmutableList.of("--output", "--system"))));
-    assertThat(e).hasMessageThat().contains("missing required argument for: --output");
   }
 }

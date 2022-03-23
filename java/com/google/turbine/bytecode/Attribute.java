@@ -41,8 +41,7 @@ interface Attribute {
     RUNTIME_VISIBLE_TYPE_ANNOTATIONS("RuntimeVisibleTypeAnnotations"),
     RUNTIME_INVISIBLE_TYPE_ANNOTATIONS("RuntimeInvisibleTypeAnnotations"),
     METHOD_PARAMETERS("MethodParameters"),
-    MODULE("Module"),
-    TURBINE_TRANSITIVE_JAR("TurbineTransitiveJar");
+    MODULE("Module");
 
     private final String signature;
 
@@ -308,21 +307,6 @@ interface Attribute {
 
     public ModuleInfo module() {
       return module;
-    }
-  }
-
-  /** A custom attribute for recording the original jar of repackaged transitive classes. */
-  class TurbineTransitiveJar implements Attribute {
-
-    final String transitiveJar;
-
-    public TurbineTransitiveJar(String transitiveJar) {
-      this.transitiveJar = transitiveJar;
-    }
-
-    @Override
-    public Kind kind() {
-      return Kind.TURBINE_TRANSITIVE_JAR;
     }
   }
 }
