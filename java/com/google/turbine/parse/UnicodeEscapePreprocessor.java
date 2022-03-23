@@ -30,7 +30,7 @@ public class UnicodeEscapePreprocessor {
   private final String input;
 
   private int idx = 0;
-  private int ch;
+  private char ch;
   private boolean evenLeadingSlashes = true;
 
   public UnicodeEscapePreprocessor(SourceFile source) {
@@ -49,7 +49,7 @@ public class UnicodeEscapePreprocessor {
   }
 
   /** Returns the next unescaped Unicode input character. */
-  public int next() {
+  public char next() {
     eat();
     if (ch == '\\' && evenLeadingSlashes) {
       unicodeEscape();
@@ -88,7 +88,7 @@ public class UnicodeEscapePreprocessor {
   }
 
   /** Consumes a hex digit. */
-  private int hexDigit(int d) {
+  private int hexDigit(char d) {
     switch (d) {
       case '0':
       case '1':
@@ -130,20 +130,8 @@ public class UnicodeEscapePreprocessor {
    * it terminates the input avoids some bounds checks in the lexer.
    */
   private void eat() {
-    char hi = done() ? ASCII_SUB : input.charAt(idx);
+    ch = done() ? ASCII_SUB : input.charAt(idx);
     idx++;
-    if (!Character.isHighSurrogate(hi)) {
-      ch = hi;
-      return;
-    }
-    if (done()) {
-      throw error(ErrorKind.UNPAIRED_SURROGATE, (int) hi);
-    }
-    char lo = input.charAt(idx++);
-    if (!Character.isLowSurrogate(lo)) {
-      throw error(ErrorKind.UNPAIRED_SURROGATE, (int) hi);
-    }
-    ch = Character.toCodePoint(hi, lo);
   }
 
   public SourceFile source() {
