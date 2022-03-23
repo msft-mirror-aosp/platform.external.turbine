@@ -35,7 +35,7 @@ public class ParseErrorTest {
     StreamLexer lexer =
         new StreamLexer(
             new UnicodeEscapePreprocessor(new SourceFile("<>", String.valueOf("2147483648"))));
-    ConstExpressionParser parser = new ConstExpressionParser(lexer, lexer.next());
+    ConstExpressionParser parser = new ConstExpressionParser(lexer, lexer.next(), lexer.position());
     TurbineError e = assertThrows(TurbineError.class, () -> parser.expression());
     assertThat(e).hasMessageThat().contains("invalid literal");
   }
@@ -45,7 +45,7 @@ public class ParseErrorTest {
     StreamLexer lexer =
         new StreamLexer(
             new UnicodeEscapePreprocessor(new SourceFile("<>", String.valueOf("0x100000000"))));
-    ConstExpressionParser parser = new ConstExpressionParser(lexer, lexer.next());
+    ConstExpressionParser parser = new ConstExpressionParser(lexer, lexer.next(), lexer.position());
     TurbineError e = assertThrows(TurbineError.class, () -> parser.expression());
     assertThat(e).hasMessageThat().contains("invalid literal");
   }
@@ -292,6 +292,19 @@ public class ParseErrorTest {
                 "<>:1: error: unexpected input: U+10000", //
                 "..\uD800\uDC00",
                 "   ^"));
+  }
+
+  @Test
+  public void notCast() {
+    String input = "@j(@truetugt^(oflur)!%t";
+    TurbineError e = assertThrows(TurbineError.class, () -> Parser.parse(input));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            lines(
+                "<>:1: error: could not evaluate constant expression",
+                "@j(@truetugt^(oflur)!%t",
+                "                     ^"));
   }
 
   private static String lines(String... lines) {
