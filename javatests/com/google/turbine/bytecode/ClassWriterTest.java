@@ -90,8 +90,7 @@ public class ClassWriterTest {
     byte[] original = Files.readAllBytes(out.resolve("test/Test.class"));
     byte[] actual = ClassWriter.writeClass(ClassReader.read(null, original));
 
-    assertThat(AsmUtils.textify(original, /* skipDebug= */ true))
-        .isEqualTo(AsmUtils.textify(actual, /* skipDebug= */ true));
+    assertThat(AsmUtils.textify(original)).isEqualTo(AsmUtils.textify(actual));
   }
 
   // Test that >Short.MAX_VALUE constants round-trip through the constant pool.
@@ -146,12 +145,10 @@ public class ClassWriterTest {
     byte[] inputBytes = cw.toByteArray();
     byte[] outputBytes = ClassWriter.writeClass(ClassReader.read("module-info", inputBytes));
 
-    assertThat(AsmUtils.textify(inputBytes, /* skipDebug= */ true))
-        .isEqualTo(AsmUtils.textify(outputBytes, /* skipDebug= */ true));
+    assertThat(AsmUtils.textify(inputBytes)).isEqualTo(AsmUtils.textify(outputBytes));
 
     // test a round trip
     outputBytes = ClassWriter.writeClass(ClassReader.read("module-info", outputBytes));
-    assertThat(AsmUtils.textify(inputBytes, /* skipDebug= */ true))
-        .isEqualTo(AsmUtils.textify(outputBytes, /* skipDebug= */ true));
+    assertThat(AsmUtils.textify(inputBytes)).isEqualTo(AsmUtils.textify(outputBytes));
   }
 }
