@@ -19,7 +19,6 @@ package com.google.turbine.binder;
 import static java.util.Objects.requireNonNull;
 
 import com.google.auto.value.AutoValue;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
@@ -30,7 +29,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.Sets;
-import com.google.common.primitives.Ints;
 import com.google.turbine.binder.Binder.BindingResult;
 import com.google.turbine.binder.Binder.Statistics;
 import com.google.turbine.binder.bound.SourceTypeBoundClass;
@@ -61,7 +59,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -74,13 +71,12 @@ import javax.annotation.processing.Processor;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.nullness.Nullable;
 
 /** Top level annotation processing logic, see also {@link Binder}. */
 public class Processing {
 
-  @Nullable
-  static BindingResult process(
+  static @Nullable BindingResult process(
       TurbineLog log,
       final ImmutableList<CompUnit> initialSources,
       final ClassPath classpath,
@@ -99,10 +95,9 @@ public class Processing {
     TurbineFiler filer =
         new TurbineFiler(
             seen,
-            new Function<String, Supplier<byte[]>>() {
-              @Nullable
+            new Function<String, @Nullable Supplier<byte[]>>() {
               @Override
-              public Supplier<byte[]> apply(@Nullable String input) {
+              public @Nullable Supplier<byte[]> apply(String input) {
                 // TODO(cushon): should annotation processors be allowed to generate code with
                 // dependencies between source and bytecode, or vice versa?
                 // Currently generated classes are not available on the classpath when compiling
@@ -277,7 +272,7 @@ public class Processing {
     for (Processor processor : processorInfo.processors()) {
       result.put(processor, SupportedAnnotationTypes.create(processor));
     }
-    return result.build();
+    return result.buildOrThrow();
   }
 
   @AutoValue
@@ -316,7 +311,7 @@ public class Processing {
       Env<ClassSymbol, TypeBoundClass> env, Iterable<ClassSymbol> syms) {
     ImmutableSetMultimap.Builder<ClassSymbol, Symbol> result = ImmutableSetMultimap.builder();
     for (ClassSymbol sym : syms) {
-      TypeBoundClass info = env.get(sym);
+      TypeBoundClass info = env.getNonNull(sym);
       for (AnnoInfo annoInfo : info.annotations()) {
         if (sym.simpleName().equals("package-info")) {
           addAnno(result, annoInfo, sym.owner());
@@ -349,7 +344,7 @@ public class Processing {
 
   // TODO(cushon): consider memoizing this (or isAnnotationInherited) if they show up in profiles
   private static ImmutableSet<ClassSymbol> inheritedAnnotations(
-      Set<ClassSymbol> seen, ClassSymbol sym, Env<ClassSymbol, TypeBoundClass> env) {
+      Set<ClassSymbol> seen, @Nullable ClassSymbol sym, Env<ClassSymbol, TypeBoundClass> env) {
     ImmutableSet.Builder<ClassSymbol> result = ImmutableSet.builder();
     ClassSymbol curr = sym;
     while (curr != null && seen.add(curr)) {
@@ -394,6 +389,7 @@ public class Processing {
   }
 
   public static ProcessorInfo initializeProcessors(
+      SourceVersion sourceVersion,
       ImmutableList<String> javacopts,
       ImmutableSet<String> processorNames,
       ClassLoader processorLoader) {
@@ -402,7 +398,6 @@ public class Processing {
     }
     ImmutableList<Processor> processors = instantiateProcessors(processorNames, processorLoader);
     ImmutableMap<String, String> processorOptions = processorOptions(javacopts);
-    SourceVersion sourceVersion = parseSourceVersion(javacopts);
     return ProcessorInfo.create(processors, processorLoader, processorOptions, sourceVersion);
   }
 
@@ -429,7 +424,7 @@ public class Processing {
     }
     return new URLClassLoader(
         toUrls(processorPath),
-        new ClassLoader(getPlatformClassLoader()) {
+        new ClassLoader(ClassLoader.getPlatformClassLoader()) {
           @Override
           protected Class<?> findClass(String name) throws ClassNotFoundException {
             if (name.equals("com.google.turbine.processing.TurbineProcessingEnvironment")) {
@@ -453,54 +448,6 @@ public class Processing {
         });
   }
 
-  @VisibleForTesting
-  static SourceVersion parseSourceVersion(ImmutableList<String> javacopts) {
-    SourceVersion sourceVersion = SourceVersion.latestSupported();
-    Iterator<String> it = javacopts.iterator();
-    while (it.hasNext()) {
-      String option = it.next();
-      switch (option) {
-        case "-source":
-          if (!it.hasNext()) {
-            throw new IllegalArgumentException("-source requires an argument");
-          }
-          sourceVersion = parseSourceVersion(it.next());
-          break;
-        default:
-          break;
-      }
-    }
-    return sourceVersion;
-  }
-
-  private static SourceVersion parseSourceVersion(String value) {
-    boolean hasPrefix = value.startsWith("1.");
-    Integer version = Ints.tryParse(hasPrefix ? value.substring("1.".length()) : value);
-    if (!isValidSourceVersion(version, hasPrefix)) {
-      throw new IllegalArgumentException("invalid -source version: " + value);
-    }
-    try {
-      return SourceVersion.valueOf("RELEASE_" + version);
-    } catch (IllegalArgumentException unused) {
-      throw new IllegalArgumentException("invalid -source version: " + value);
-    }
-  }
-
-  private static boolean isValidSourceVersion(Integer version, boolean hasPrefix) {
-    if (version == null) {
-      return false;
-    }
-    if (version < 5) {
-      // the earliest source version supported by JDK 8 is Java 5
-      return false;
-    }
-    if (hasPrefix && version > 10) {
-      // javac supports legacy `1.*` version numbers for source versions up to Java 10
-      return false;
-    }
-    return true;
-  }
-
   private static URL[] toUrls(ImmutableList<String> processorPath) throws MalformedURLException {
     URL[] urls = new URL[processorPath.size()];
     int i = 0;
@@ -508,15 +455,6 @@ public class Processing {
       urls[i++] = Paths.get(path).toUri().toURL();
     }
     return urls;
-  }
-
-  public static ClassLoader getPlatformClassLoader() {
-    try {
-      return (ClassLoader) ClassLoader.class.getMethod("getPlatformClassLoader").invoke(null);
-    } catch (ReflectiveOperationException e) {
-      // In earlier releases, set 'null' as the parent to delegate to the boot class loader.
-      return null;
-    }
   }
 
   private static ImmutableMap<String, String> processorOptions(ImmutableList<String> javacopts) {
@@ -550,8 +488,7 @@ public class Processing {
      * The classloader to use for annotation processor implementations, and any annotations they
      * access reflectively.
      */
-    @Nullable
-    abstract ClassLoader loader();
+    abstract @Nullable ClassLoader loader();
 
     /** Command line annotation processing options, passed to javac with {@code -Akey=value}. */
     abstract ImmutableMap<String, String> options();
@@ -609,7 +546,7 @@ public class Processing {
         // requireNonNull is safe, barring bizarre processor implementations (e.g., anonymous class)
         result.put(requireNonNull(e.getKey().getCanonicalName()), e.getValue().elapsed());
       }
-      return result.build();
+      return result.buildOrThrow();
     }
   }
 
