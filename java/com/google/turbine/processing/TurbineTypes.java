@@ -29,6 +29,7 @@ import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.binder.sym.FieldSymbol;
 import com.google.turbine.binder.sym.MethodSymbol;
 import com.google.turbine.binder.sym.ParamSymbol;
+import com.google.turbine.binder.sym.RecordComponentSymbol;
 import com.google.turbine.binder.sym.Symbol;
 import com.google.turbine.binder.sym.TyVarSymbol;
 import com.google.turbine.model.TurbineConstantTypeKind;
@@ -68,9 +69,10 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.WildcardType;
 import javax.lang.model.util.Types;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.nullness.Nullable;
 
 /** An implementation of {@link Types} backed by turbine's {@link TypeMirror}. */
+@SuppressWarnings("nullness") // TODO(cushon): Address nullness diagnostics.
 public class TurbineTypes implements Types {
 
   private final ModelFactory factory;
@@ -217,8 +219,15 @@ public class TurbineTypes implements Types {
     if (bounds.isEmpty()) {
       return true;
     }
-    ClassTy first = (ClassTy) bounds.get(0);
-    return factory.getSymbol(first.sym()).kind().equals(TurbineTyKind.INTERFACE);
+    Type bound = bounds.get(0);
+    switch (bound.tyKind()) {
+      case TY_VAR:
+        return false;
+      case CLASS_TY:
+        return factory.getSymbol(((ClassTy) bound).sym()).kind().equals(TurbineTyKind.INTERFACE);
+      default:
+        throw new AssertionError(bound.tyKind());
+    }
   }
 
   private boolean isSameWildType(WildTy a, Type other) {
@@ -364,8 +373,8 @@ public class TurbineTypes implements Types {
   }
 
   private boolean isTyVarSubtype(TyVar a, Type b, boolean strict) {
-    if (b.tyKind() == TyKind.TY_VAR) {
-      return a.sym().equals(((TyVar) b).sym());
+    if (b.tyKind() == TyKind.TY_VAR && a.sym().equals(((TyVar) b).sym())) {
+      return true;
     }
     TyVarInfo tyVarInfo = factory.getTyVarInfo(a.sym());
     return isSubtype(tyVarInfo.upperBound(), b, strict);
@@ -520,11 +529,12 @@ public class TurbineTypes implements Types {
   }
 
   /**
-   * Given two parameterizations of the same {@link SimpleClassTy}, {@code a} and {@code b}, teturns
+   * Given two parameterizations of the same {@link SimpleClassTy}, {@code a} and {@code b}, returns
    * true if the type arguments of {@code a} are pairwise contained by the type arguments of {@code
    * b}.
    *
-   * @see {@link #contains} and JLS 4.5.1.
+   * @see #contains
+   * @see "JLS 4.5.1"
    */
   private boolean tyArgsContains(SimpleClassTy a, SimpleClassTy b, boolean strict) {
     verify(a.sym().equals(b.sym()));
@@ -624,8 +634,7 @@ public class TurbineTypes implements Types {
    * Returns a mapping that can be used to adapt the signature 'b' to the type parameters of 'a', or
    * {@code null} if no such mapping exists.
    */
-  @Nullable
-  private static ImmutableMap<TyVarSymbol, Type> getMapping(MethodTy a, MethodTy b) {
+  private static @Nullable ImmutableMap<TyVarSymbol, Type> getMapping(MethodTy a, MethodTy b) {
     if (a.tyParams().size() != b.tyParams().size()) {
       return null;
     }
@@ -637,15 +646,14 @@ public class TurbineTypes implements Types {
       TyVarSymbol t = bx.next();
       mapping.put(t, TyVar.create(s, ImmutableList.of()));
     }
-    return mapping.build();
+    return mapping.buildOrThrow();
   }
 
   /**
    * Returns a map from formal type parameters to their arguments for a given class type, or an
    * empty map for non-parameterized types, or {@code null} for raw types.
    */
-  @Nullable
-  private ImmutableMap<TyVarSymbol, Type> getMapping(ClassTy ty) {
+  private @Nullable ImmutableMap<TyVarSymbol, Type> getMapping(ClassTy ty) {
     ImmutableMap.Builder<TyVarSymbol, Type> mapping = ImmutableMap.builder();
     for (SimpleClassTy s : ty.classes()) {
       TypeBoundClass info = factory.getSymbol(s.sym());
@@ -659,7 +667,7 @@ public class TurbineTypes implements Types {
       }
       verify(!bx.hasNext());
     }
-    return mapping.build();
+    return mapping.buildOrThrow();
   }
 
   @Override
@@ -1131,6 +1139,8 @@ public class TurbineTypes implements Types {
         return ((FieldSymbol) symbol).owner();
       case PARAMETER:
         return ((ParamSymbol) symbol).owner().owner();
+      case RECORD_COMPONENT:
+        return ((RecordComponentSymbol) symbol).owner();
       case MODULE:
       case PACKAGE:
         throw new IllegalArgumentException(symbol.symKind().toString());
