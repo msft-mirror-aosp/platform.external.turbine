@@ -29,41 +29,35 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest ]
-        java: [ 16, 11, 8 ]
+        java: [ 17, 11 ]
         experimental: [ false ]
         include:
           # Only test on macos and windows with a single recent JDK to avoid a
           # combinatorial explosion of test configurations.
           - os: macos-latest
-            java: 16
+            java: 17
             experimental: false
           - os: windows-latest
-            java: 16
+            java: 17
             experimental: false
           - os: ubuntu-latest
-            java: 17-ea
+            java: 18-ea
             experimental: true
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.experimental }}
     steps:
       - name: Cancel previous
-        uses: styfle/cancel-workflow-action@0.8.0
+        uses: styfle/cancel-workflow-action@0.9.1
         with:
           access_token: ${{ github.token }}
       - name: 'Check out repository'
         uses: actions/checkout@v2
-      - name: 'Cache local Maven repository'
-        uses: actions/cache@v2
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
       - name: 'Set up JDK ${{ matrix.java }}'
         uses: actions/setup-java@v2
         with:
           java-version: ${{ matrix.java }}
-          distribution: 'adopt'
+          distribution: 'zulu'
+          cache: 'maven'
       - name: 'Install'
         shell: bash
         run: mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
