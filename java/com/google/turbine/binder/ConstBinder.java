@@ -29,6 +29,7 @@ import com.google.turbine.binder.bound.TypeBoundClass;
 import com.google.turbine.binder.bound.TypeBoundClass.FieldInfo;
 import com.google.turbine.binder.bound.TypeBoundClass.MethodInfo;
 import com.google.turbine.binder.bound.TypeBoundClass.ParamInfo;
+import com.google.turbine.binder.bound.TypeBoundClass.RecordComponentInfo;
 import com.google.turbine.binder.bound.TypeBoundClass.TyVarInfo;
 import com.google.turbine.binder.env.CompoundEnv;
 import com.google.turbine.binder.env.Env;
@@ -57,6 +58,7 @@ import com.google.turbine.type.Type.WildUnboundedTy;
 import com.google.turbine.type.Type.WildUpperBoundedTy;
 import java.lang.annotation.RetentionPolicy;
 import java.util.Map;
+import org.jspecify.nullness.Nullable;
 
 /** Binding pass to evaluate constant expressions. */
 public class ConstBinder {
@@ -103,13 +105,16 @@ public class ConstBinder {
                 env,
                 log)
             .evaluateAnnotations(base.annotations());
+    ImmutableList<RecordComponentInfo> components = bindRecordComponents(base.components());
     ImmutableList<TypeBoundClass.FieldInfo> fields = fields(base.fields());
     ImmutableList<MethodInfo> methods = bindMethods(base.methods());
     return new SourceTypeBoundClass(
         bindTypes(base.interfaceTypes()),
+        base.permits(),
         base.superClassType() != null ? bindType(base.superClassType()) : null,
         bindTypeParameters(base.typeParameterTypes()),
         base.access(),
+        components,
         methods,
         fields,
         base.owner(),
@@ -166,7 +171,17 @@ public class ConstBinder {
     return new ParamInfo(base.sym(), bindType(base.type()), annos, base.access());
   }
 
-  static AnnotationMetadata bindAnnotationMetadata(
+  private ImmutableList<RecordComponentInfo> bindRecordComponents(
+      ImmutableList<RecordComponentInfo> components) {
+    ImmutableList.Builder<RecordComponentInfo> result = ImmutableList.builder();
+    for (RecordComponentInfo base : components) {
+      ImmutableList<AnnoInfo> annos = constEvaluator.evaluateAnnotations(base.annotations());
+      result.add(new RecordComponentInfo(base.sym(), bindType(base.type()), annos, base.access()));
+    }
+    return result.build();
+  }
+
+  static @Nullable AnnotationMetadata bindAnnotationMetadata(
       TurbineTyKind kind, Iterable<AnnoInfo> annotations) {
     if (kind != TurbineTyKind.ANNOTATION) {
       return null;
@@ -196,7 +211,7 @@ public class ConstBinder {
     return new AnnotationMetadata(retention, target, repeatable);
   }
 
-  private static RetentionPolicy bindRetention(AnnoInfo annotation) {
+  private static @Nullable RetentionPolicy bindRetention(AnnoInfo annotation) {
     Const value = annotation.values().get("value");
     if (value == null) {
       return null;
@@ -232,7 +247,7 @@ public class ConstBinder {
     return result.build();
   }
 
-  private static ClassSymbol bindRepeatable(AnnoInfo annotation) {
+  private static @Nullable ClassSymbol bindRepeatable(AnnoInfo annotation) {
     // requireNonNull is safe because java.lang.annotation.Repeatable declares `value`.
     Const value = requireNonNull(annotation.values().get("value"));
     if (value.kind() != Kind.CLASS_LITERAL) {
@@ -268,7 +283,7 @@ public class ConstBinder {
     return result.build();
   }
 
-  private Value fieldValue(TypeBoundClass.FieldInfo base) {
+  private @Nullable Value fieldValue(TypeBoundClass.FieldInfo base) {
     if (base.decl() == null || !base.decl().init().isPresent()) {
       return null;
     }
@@ -292,7 +307,9 @@ public class ConstBinder {
       return null;
     }
     if (type.tyKind().equals(TyKind.PRIM_TY)) {
-      value = ConstEvaluator.coerce(value, ((Type.PrimTy) type).primkind());
+      value =
+          constEvaluator.coerce(
+              base.decl().init().get().position(), value, ((Type.PrimTy) type).primkind());
     }
     return value;
   }
@@ -317,7 +334,7 @@ public class ConstBinder {
               /* lowerBound= */ null,
               constEvaluator.evaluateAnnotations(info.annotations())));
     }
-    return result.build();
+    return result.buildOrThrow();
   }
 
   private Type bindType(Type type) {
