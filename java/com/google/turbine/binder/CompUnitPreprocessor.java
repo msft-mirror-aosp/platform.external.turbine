@@ -149,7 +149,7 @@ public final class CompUnitPreprocessor {
         types.add(new SourceBoundClass(sym, owner, children, access, decl));
       }
     }
-    return result.build();
+    return result.buildOrThrow();
   }
 
   /** Desugars access flags for a class. */
@@ -175,6 +175,9 @@ public final class CompUnitPreprocessor {
       case ANNOTATION:
         access |= TurbineFlag.ACC_ABSTRACT | TurbineFlag.ACC_INTERFACE | TurbineFlag.ACC_ANNOTATION;
         break;
+      case RECORD:
+        access |= TurbineFlag.ACC_SUPER | TurbineFlag.ACC_FINAL;
+        break;
     }
     return access;
   }
@@ -195,12 +198,14 @@ public final class CompUnitPreprocessor {
       case INTERFACE:
       case ENUM:
       case ANNOTATION:
+      case RECORD:
         access |= TurbineFlag.ACC_STATIC;
         break;
       case CLASS:
         if ((enclosing & (TurbineFlag.ACC_INTERFACE | TurbineFlag.ACC_ANNOTATION)) != 0) {
           access |= TurbineFlag.ACC_STATIC;
         }
+        break;
     }
 
     // propagate strictfp to nested types
@@ -217,6 +222,8 @@ public final class CompUnitPreprocessor {
         new Ident(pkgDecl.position(), "package-info"),
         ImmutableList.of(),
         Optional.empty(),
+        ImmutableList.of(),
+        ImmutableList.of(),
         ImmutableList.of(),
         ImmutableList.of(),
         TurbineTyKind.INTERFACE,
