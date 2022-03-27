@@ -771,12 +771,6 @@ public class BinderErrorTest {
           "<>:3: error: missing required annotation argument: value",
           "@Retention",
           "^",
-          "<>:4: error: missing required annotation argument: value",
-          "@Retention",
-          "^",
-          "<>:3: error: java.lang.annotation.Retention is not @Repeatable",
-          "@Retention",
-          "^",
         },
       },
       {
@@ -810,6 +804,158 @@ public class BinderErrorTest {
           "<>:6: error: C is not an annotation", //
           "@A(value = @C)",
           "            ^",
+        },
+      },
+      {
+        {
+          "@interface A {",
+          "  boolean x();",
+          "  boolean value();",
+          "}",
+          "@A(x = true, false)",
+          "class T {}",
+        },
+        {
+          "<>:5: error: expected an annotation value of the form name=value",
+          "@A(x = true, false)",
+          "             ^",
+        },
+      },
+      {
+        {
+          "@interface A {",
+          "  boolean value();",
+          "}",
+          "class B {",
+          "  static final String X = \"hello\";",
+          "}",
+          "@A(B.X)",
+          "class T {}",
+        },
+        {
+          "<>:7: error: value \"hello\" of type String cannot be converted to boolean",
+          "@A(B.X)",
+          "   ^",
+        },
+      },
+      {
+        {
+          "class T {", //
+          "  public static final boolean b = true == 42;",
+          "}",
+        },
+        {
+          "<>:2: error: value 42 of type int cannot be converted to boolean",
+          "  public static final boolean b = true == 42;",
+          "                                          ^",
+        },
+      },
+      {
+        {
+          "class T {", //
+          "  public static final byte b = (byte) \"hello\";",
+          "}",
+        },
+        {
+          "<>:2: error: value \"hello\" of type String cannot be converted to byte",
+          "  public static final byte b = (byte) \"hello\";",
+          "                                      ^",
+        }
+      },
+      {
+        {
+          "class T {", //
+          "  public static final char c = (char) \"hello\";",
+          "}",
+        },
+        {
+          "<>:2: error: value \"hello\" of type String cannot be converted to char",
+          "  public static final char c = (char) \"hello\";",
+          "                                      ^",
+        }
+      },
+      {
+        {
+          "class T {", //
+          "  public static final short s = (short) \"hello\";",
+          "}",
+        },
+        {
+          "<>:2: error: value \"hello\" of type String cannot be converted to short",
+          "  public static final short s = (short) \"hello\";",
+          "                                        ^",
+        }
+      },
+      {
+        {
+          "class T {", //
+          "  public static final int i = (int) \"hello\";",
+          "}",
+        },
+        {
+          "<>:2: error: value \"hello\" of type String cannot be converted to int",
+          "  public static final int i = (int) \"hello\";",
+          "                                    ^",
+        }
+      },
+      {
+        {
+          "class T {", //
+          "  public static final long l = (long) \"hello\";",
+          "}",
+        },
+        {
+          "<>:2: error: value \"hello\" of type String cannot be converted to long",
+          "  public static final long l = (long) \"hello\";",
+          "                                      ^",
+        }
+      },
+      {
+        {
+          "class T {", //
+          "  public static final float f = (float) \"hello\";",
+          "}",
+        },
+        {
+          "<>:2: error: value \"hello\" of type String cannot be converted to float",
+          "  public static final float f = (float) \"hello\";",
+          "                                        ^",
+        }
+      },
+      {
+        {
+          "class T {", //
+          "  public static final double d = (double) \"hello\";",
+          "}",
+        },
+        {
+          "<>:2: error: value \"hello\" of type String cannot be converted to double",
+          "  public static final double d = (double) \"hello\";",
+          "                                          ^",
+        },
+      },
+      {
+        {
+          "class T {", //
+          "  public static final boolean X = \"1\" == 2;",
+          "}",
+        },
+        {
+          "<>:2: error: value 2 of type int cannot be converted to String",
+          "  public static final boolean X = \"1\" == 2;",
+          "                                         ^",
+        },
+      },
+      {
+        {
+          "class T {", //
+          "  public static final boolean X = \"1\" != 2;",
+          "}",
+        },
+        {
+          "<>:2: error: value 2 of type int cannot be converted to String",
+          "  public static final boolean X = \"1\" != 2;",
+          "                                         ^",
         },
       },
     };
