@@ -22,6 +22,7 @@ import static com.google.turbine.parse.UnicodeEscapePreprocessor.ASCII_SUB;
 import com.google.turbine.diag.SourceFile;
 import com.google.turbine.diag.TurbineError;
 import com.google.turbine.diag.TurbineError.ErrorKind;
+import org.jspecify.nullness.Nullable;
 
 /** A {@link Lexer} that streams input from a {@link UnicodeEscapePreprocessor}. */
 public class StreamLexer implements Lexer {
@@ -65,7 +66,7 @@ public class StreamLexer implements Lexer {
   }
 
   @Override
-  public String javadoc() {
+  public @Nullable String javadoc() {
     String result = javadoc;
     javadoc = null;
     if (result == null) {
