@@ -27,7 +27,7 @@ import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.diag.TurbineError.ErrorKind;
 import java.util.Objects;
 import javax.tools.Diagnostic;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.nullness.Nullable;
 
 /** A compilation error. */
 public class TurbineDiagnostic {
@@ -77,6 +77,7 @@ public class TurbineDiagnostic {
     sb.append(": error: ");
     sb.append(message()).append(System.lineSeparator());
     if (line() != -1 && column() != -1) {
+      requireNonNull(source); // line and column imply source is non-null
       sb.append(CharMatcher.breakingWhitespace().trimTrailingFrom(source.lineMap().line(position)))
           .append(System.lineSeparator());
       sb.append(Strings.repeat(" ", column() - 1)).append('^');
@@ -143,7 +144,7 @@ public class TurbineDiagnostic {
   }
 
   @Override
-  public boolean equals(Object obj) {
+  public boolean equals(@Nullable Object obj) {
     if (!(obj instanceof TurbineDiagnostic)) {
       return false;
     }
@@ -159,10 +160,12 @@ public class TurbineDiagnostic {
     return source != null && source.path() != null ? source.path() : "<>";
   }
 
+  @SuppressWarnings("nullness") // position != -1 implies source is non-null
   public int line() {
     return position != -1 ? source.lineMap().lineNumber(position) : -1;
   }
 
+  @SuppressWarnings("nullness") // position != -1 implies source is non-null
   public int column() {
     return position != -1 ? source.lineMap().column(position) + 1 : -1;
   }
