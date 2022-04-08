@@ -96,7 +96,7 @@ public class ConstExpressionParser {
     }
   }
 
-  private Tree.@Nullable Expression primary(boolean negate) {
+  private Tree.Expression primary(boolean negate) {
     switch (token) {
       case INT_LITERAL:
         return finishLiteral(TurbineConstantTypeKind.INT, negate);
@@ -133,9 +133,8 @@ public class ConstExpressionParser {
       case LPAREN:
         return maybeCast();
       case LBRACE:
-        int pos = position;
         eat();
-        return arrayInitializer(pos);
+        return arrayInitializer();
       case IDENT:
         return qualIdent();
       case BYTE:
@@ -245,10 +244,10 @@ public class ConstExpressionParser {
     position = lexer.position();
   }
 
-  private Tree.Expression arrayInitializer(int pos) {
+  private Tree.Expression arrayInitializer() {
     if (token == Token.RBRACE) {
       eat();
-      return new Tree.ArrayInit(pos, ImmutableList.<Tree.Expression>of());
+      return new Tree.ArrayInit(position, ImmutableList.<Tree.Expression>of());
     }
 
     ImmutableList.Builder<Tree.Expression> exprs = ImmutableList.builder();
@@ -274,12 +273,11 @@ public class ConstExpressionParser {
           return null;
       }
     }
-    return new Tree.ArrayInit(pos, exprs.build());
+    return new Tree.ArrayInit(position, exprs.build());
   }
 
   /** Finish hex, decimal, octal, and binary integer literals (see JLS 3.10.1). */
   private Tree.Expression finishLiteral(TurbineConstantTypeKind kind, boolean negate) {
-    int pos = position;
     String text = ident().value();
     Const.Value value;
     switch (kind) {
@@ -356,7 +354,7 @@ public class ConstExpressionParser {
         throw new AssertionError(kind);
     }
     eat();
-    return new Tree.Literal(pos, kind, value);
+    return new Tree.Literal(position, kind, value);
   }
 
   static boolean isOctal(String text) {
@@ -563,16 +561,12 @@ public class ConstExpressionParser {
     return new Tree.TypeCast(position, new Tree.PrimTy(position, ImmutableList.of(), ty), rhs);
   }
 
-  private Tree.@Nullable AnnoExpr annotation() {
+  private Tree.AnnoExpr annotation() {
     if (token != Token.AT) {
       throw new AssertionError();
     }
     eat();
-    Tree.ConstVarName constVarName = (Tree.ConstVarName) qualIdent();
-    if (constVarName == null) {
-      return null;
-    }
-    ImmutableList<Ident> name = constVarName.name();
+    ImmutableList<Ident> name = ((Tree.ConstVarName) qualIdent()).name();
     ImmutableList.Builder<Tree.Expression> args = ImmutableList.builder();
     if (token == Token.LPAREN) {
       eat();

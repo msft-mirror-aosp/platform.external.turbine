@@ -36,6 +36,8 @@ import com.google.turbine.tree.Tree;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.jar.JarEntry;
@@ -53,21 +55,22 @@ public class BinderTest {
 
   @Test
   public void hello() throws Exception {
-    ImmutableList<Tree.CompUnit> units =
-        ImmutableList.of(
-            parseLines(
-                "package a;", //
-                "public class A {",
-                "  public class Inner1 extends b.B {",
-                "  }",
-                "  public class Inner2 extends A.Inner1 {",
-                "  }",
-                "}"),
-            parseLines(
-                "package b;", //
-                "import a.A;",
-                "public class B extends A {",
-                "}"));
+    List<Tree.CompUnit> units = new ArrayList<>();
+    units.add(
+        parseLines(
+            "package a;", //
+            "public class A {",
+            "  public class Inner1 extends b.B {",
+            "  }",
+            "  public class Inner2 extends A.Inner1 {",
+            "  }",
+            "}"));
+    units.add(
+        parseLines(
+            "package b;", //
+            "import a.A;",
+            "public class B extends A {",
+            "}"));
 
     ImmutableMap<ClassSymbol, SourceTypeBoundClass> bound =
         Binder.bind(
@@ -100,19 +103,20 @@ public class BinderTest {
 
   @Test
   public void interfaces() throws Exception {
-    ImmutableList<Tree.CompUnit> units =
-        ImmutableList.of(
-            parseLines(
-                "package com.i;", //
-                "public interface I {",
-                "  public class IInner {",
-                "  }",
-                "}"),
-            parseLines(
-                "package b;", //
-                "class B implements com.i.I {",
-                "  class BInner extends IInner {}",
-                "}"));
+    List<Tree.CompUnit> units = new ArrayList<>();
+    units.add(
+        parseLines(
+            "package com.i;", //
+            "public interface I {",
+            "  public class IInner {",
+            "  }",
+            "}"));
+    units.add(
+        parseLines(
+            "package b;", //
+            "class B implements com.i.I {",
+            "  class BInner extends IInner {}",
+            "}"));
 
     ImmutableMap<ClassSymbol, SourceTypeBoundClass> bound =
         Binder.bind(
@@ -139,19 +143,20 @@ public class BinderTest {
 
   @Test
   public void imports() throws Exception {
-    ImmutableList<Tree.CompUnit> units =
-        ImmutableList.of(
-            parseLines(
-                "package com.test;", //
-                "public class Test {",
-                "  public static class Inner {}",
-                "}"),
-            parseLines(
-                "package other;", //
-                "import com.test.Test.Inner;",
-                "import no.such.Class;", // imports are resolved lazily on-demand
-                "public class Foo extends Inner {",
-                "}"));
+    List<Tree.CompUnit> units = new ArrayList<>();
+    units.add(
+        parseLines(
+            "package com.test;", //
+            "public class Test {",
+            "  public static class Inner {}",
+            "}"));
+    units.add(
+        parseLines(
+            "package other;", //
+            "import com.test.Test.Inner;",
+            "import no.such.Class;", // imports are resolved lazily on-demand
+            "public class Foo extends Inner {",
+            "}"));
 
     ImmutableMap<ClassSymbol, SourceTypeBoundClass> bound =
         Binder.bind(
@@ -167,20 +172,21 @@ public class BinderTest {
 
   @Test
   public void cycle() throws Exception {
-    ImmutableList<Tree.CompUnit> units =
-        ImmutableList.of(
-            parseLines(
-                "package a;", //
-                "import b.B;",
-                "public class A extends B.Inner {",
-                "  class Inner {}",
-                "}"),
-            parseLines(
-                "package b;", //
-                "import a.A;",
-                "public class B extends A.Inner {",
-                "  class Inner {}",
-                "}"));
+    List<Tree.CompUnit> units = new ArrayList<>();
+    units.add(
+        parseLines(
+            "package a;", //
+            "import b.B;",
+            "public class A extends B.Inner {",
+            "  class Inner {}",
+            "}"));
+    units.add(
+        parseLines(
+            "package b;", //
+            "import a.A;",
+            "public class B extends A.Inner {",
+            "  class Inner {}",
+            "}"));
 
     try {
       Binder.bind(
@@ -196,12 +202,12 @@ public class BinderTest {
 
   @Test
   public void annotationDeclaration() throws Exception {
-    ImmutableList<Tree.CompUnit> units =
-        ImmutableList.of(
-            parseLines(
-                "package com.test;", //
-                "public @interface Annotation {",
-                "}"));
+    List<Tree.CompUnit> units = new ArrayList<>();
+    units.add(
+        parseLines(
+            "package com.test;", //
+            "public @interface Annotation {",
+            "}"));
 
     ImmutableMap<ClassSymbol, SourceTypeBoundClass> bound =
         Binder.bind(
@@ -224,13 +230,13 @@ public class BinderTest {
 
   @Test
   public void helloBytecode() throws Exception {
-    ImmutableList<Tree.CompUnit> units =
-        ImmutableList.of(
-            parseLines(
-                "package a;", //
-                "import java.util.Map.Entry;",
-                "public class A implements Entry {",
-                "}"));
+    List<Tree.CompUnit> units = new ArrayList<>();
+    units.add(
+        parseLines(
+            "package a;", //
+            "import java.util.Map.Entry;",
+            "public class A implements Entry {",
+            "}"));
 
     ImmutableMap<ClassSymbol, SourceTypeBoundClass> bound =
         Binder.bind(
@@ -262,15 +268,15 @@ public class BinderTest {
       jos.write(lib.get("B"));
     }
 
-    ImmutableList<Tree.CompUnit> units =
-        ImmutableList.of(
-            parseLines(
-                "import java.lang.annotation.Target;",
-                "import java.lang.annotation.ElementType;",
-                "public class C implements B {",
-                "  @Target(ElementType.TYPE_USE)",
-                "  @interface A {};",
-                "}"));
+    List<Tree.CompUnit> units = new ArrayList<>();
+    units.add(
+        parseLines(
+            "import java.lang.annotation.Target;",
+            "import java.lang.annotation.ElementType;",
+            "public class C implements B {",
+            "  @Target(ElementType.TYPE_USE)",
+            "  @interface A {};",
+            "}"));
 
     ImmutableMap<ClassSymbol, SourceTypeBoundClass> bound =
         Binder.bind(
@@ -288,13 +294,13 @@ public class BinderTest {
   // (Error reporting is deferred to javac.)
   @Test
   public void invalidConst() throws Exception {
-    ImmutableList<Tree.CompUnit> units =
-        ImmutableList.of(
-            parseLines(
-                "package a;", //
-                "public class A {",
-                "  public static final boolean b = true == 42;",
-                "}"));
+    List<Tree.CompUnit> units = new ArrayList<>();
+    units.add(
+        parseLines(
+            "package a;", //
+            "public class A {",
+            "  public static final boolean b = true == 42;",
+            "}"));
 
     ImmutableMap<ClassSymbol, SourceTypeBoundClass> bound =
         Binder.bind(

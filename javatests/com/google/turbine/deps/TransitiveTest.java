@@ -17,6 +17,7 @@
 package com.google.turbine.deps;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static com.google.common.truth.Truth.assertThat;
 import static com.google.turbine.testing.TestClassPaths.optionsWithBootclasspath;
 
 import com.google.common.collect.ImmutableList;
@@ -33,12 +34,15 @@ public class TransitiveTest extends AbstractTransitiveTest {
   protected Path runTurbine(ImmutableList<Path> sources, ImmutableList<Path> classpath)
       throws IOException {
     Path out = temporaryFolder.newFolder().toPath().resolve("out.jar");
-    Main.compile(
-        optionsWithBootclasspath()
-            .setSources(sources.stream().map(Path::toString).collect(toImmutableList()))
-            .setClassPath(classpath.stream().map(Path::toString).collect(toImmutableList()))
-            .setOutput(out.toString())
-            .build());
+    boolean ok =
+        Main.compile(
+            optionsWithBootclasspath()
+                .addSources(sources.stream().map(Path::toString).collect(toImmutableList()))
+                .addClassPathEntries(
+                    classpath.stream().map(Path::toString).collect(toImmutableList()))
+                .setOutput(out.toString())
+                .build());
+    assertThat(ok).isTrue();
     return out;
   }
 }

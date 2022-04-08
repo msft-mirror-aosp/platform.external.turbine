@@ -16,12 +16,10 @@
 
 package com.google.turbine.binder.bound;
 
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.turbine.binder.sym.FieldSymbol;
 import com.google.turbine.binder.sym.MethodSymbol;
-import com.google.turbine.binder.sym.ParamSymbol;
 import com.google.turbine.binder.sym.TyVarSymbol;
 import com.google.turbine.model.Const;
 import com.google.turbine.model.TurbineFlag;
@@ -30,8 +28,6 @@ import com.google.turbine.tree.Tree.MethDecl;
 import com.google.turbine.type.AnnoInfo;
 import com.google.turbine.type.Type;
 import com.google.turbine.type.Type.IntersectionTy;
-import com.google.turbine.type.Type.MethodTy;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** A bound node that augments {@link HeaderBoundClass} with type information. */
 public interface TypeBoundClass extends HeaderBoundClass {
@@ -61,29 +57,17 @@ public interface TypeBoundClass extends HeaderBoundClass {
 
   /** A type parameter declaration. */
   class TyVarInfo {
-    private final IntersectionTy upperBound;
-    @Nullable private final Type lowerBound;
+    private final IntersectionTy bound;
     private final ImmutableList<AnnoInfo> annotations;
 
-    public TyVarInfo(
-        IntersectionTy upperBound, @Nullable Type lowerBound, ImmutableList<AnnoInfo> annotations) {
-      this.upperBound = upperBound;
-      if (lowerBound != null) {
-        throw new IllegalArgumentException("TODO(cushon): support lower bounds");
-      }
-      this.lowerBound = lowerBound;
+    public TyVarInfo(IntersectionTy bound, ImmutableList<AnnoInfo> annotations) {
+      this.bound = bound;
       this.annotations = annotations;
     }
 
-    /** The upper bound. */
-    public IntersectionTy upperBound() {
-      return upperBound;
-    }
-
-    /** The lower bound. */
-    @Nullable
-    public Type lowerBound() {
-      return lowerBound;
+    /** The bound. */
+    public IntersectionTy bound() {
+      return bound;
     }
 
     /** Type parameter declaration annotations. */
@@ -164,7 +148,7 @@ public interface TypeBoundClass extends HeaderBoundClass {
     private final Const defaultValue;
     private final MethDecl decl;
     private final ImmutableList<AnnoInfo> annotations;
-    private final @Nullable ParamInfo receiver;
+    private final ParamInfo receiver;
 
     public MethodInfo(
         MethodSymbol sym,
@@ -176,7 +160,7 @@ public interface TypeBoundClass extends HeaderBoundClass {
         Const defaultValue,
         MethDecl decl,
         ImmutableList<AnnoInfo> annotations,
-        @Nullable ParamInfo receiver) {
+        ParamInfo receiver) {
       this.sym = sym;
       this.tyParams = tyParams;
       this.returnType = returnType;
@@ -239,48 +223,24 @@ public interface TypeBoundClass extends HeaderBoundClass {
       return annotations;
     }
 
-    /** Receiver parameter (see JLS 8.4.1), or {@code null}. */
-    public @Nullable ParamInfo receiver() {
+    /** Receiver parameter. */
+    public ParamInfo receiver() {
       return receiver;
-    }
-
-    public MethodTy asType() {
-      return MethodTy.create(
-          tyParams.keySet(),
-          returnType,
-          receiver != null ? receiver.type() : null,
-          asTypes(parameters),
-          exceptions);
-    }
-
-    private static ImmutableList<Type> asTypes(ImmutableList<ParamInfo> parameters) {
-      ImmutableList.Builder<Type> result = ImmutableList.builder();
-      for (ParamInfo param : parameters) {
-        if (!param.synthetic()) {
-          result.add(param.type());
-        }
-      }
-      return result.build();
     }
   }
 
   /** A formal parameter declaration. */
   class ParamInfo {
-    private final ParamSymbol sym;
     private final Type type;
+    private final String name;
     private final int access;
     private final ImmutableList<AnnoInfo> annotations;
 
-    public ParamInfo(ParamSymbol sym, Type type, ImmutableList<AnnoInfo> annotations, int access) {
-      this.sym = sym;
+    public ParamInfo(Type type, String name, ImmutableList<AnnoInfo> annotations, int access) {
       this.type = type;
+      this.name = name;
       this.access = access;
       this.annotations = annotations;
-    }
-
-    /** The parameter's symbol. */
-    public ParamSymbol sym() {
-      return sym;
     }
 
     /** The parameter type. */
@@ -303,7 +263,7 @@ public interface TypeBoundClass extends HeaderBoundClass {
 
     /** The parameter's name. */
     public String name() {
-      return sym.name();
+      return name;
     }
 
     /** The parameter's modifiers. */

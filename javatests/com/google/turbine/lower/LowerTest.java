@@ -33,7 +33,6 @@ import com.google.turbine.binder.env.SimpleEnv;
 import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.binder.sym.FieldSymbol;
 import com.google.turbine.binder.sym.MethodSymbol;
-import com.google.turbine.binder.sym.ParamSymbol;
 import com.google.turbine.binder.sym.TyVarSymbol;
 import com.google.turbine.bytecode.ByteReader;
 import com.google.turbine.bytecode.ConstantPoolReader;
@@ -105,13 +104,12 @@ public class LowerTest {
                                     new ClassSymbol("test/Test$Inner"),
                                     ImmutableList.of(),
                                     ImmutableList.of()))))),
-                /* lowerBound= */ null,
                 ImmutableList.of()));
     int access = TurbineFlag.ACC_SUPER | TurbineFlag.ACC_PUBLIC;
     ImmutableList<SourceTypeBoundClass.MethodInfo> methods =
         ImmutableList.of(
             new SourceTypeBoundClass.MethodInfo(
-                new MethodSymbol(-1, new ClassSymbol("test/Test"), "f"),
+                new MethodSymbol(new ClassSymbol("test/Test"), "f"),
                 ImmutableMap.of(),
                 PrimTy.create(TurbineConstantTypeKind.INT, ImmutableList.of()),
                 ImmutableList.of(),
@@ -122,9 +120,9 @@ public class LowerTest {
                 ImmutableList.of(),
                 null),
             new SourceTypeBoundClass.MethodInfo(
-                new MethodSymbol(-1, new ClassSymbol("test/Test"), "g"),
+                new MethodSymbol(new ClassSymbol("test/Test"), "g"),
                 ImmutableMap.of(
-                    new TyVarSymbol(new MethodSymbol(-1, new ClassSymbol("test/Test"), "g"), "V"),
+                    new TyVarSymbol(new MethodSymbol(new ClassSymbol("test/Test"), "g"), "V"),
                     new SourceTypeBoundClass.TyVarInfo(
                         IntersectionTy.create(
                             ImmutableList.of(
@@ -134,9 +132,8 @@ public class LowerTest {
                                             new ClassSymbol("java/lang/Runnable"),
                                             ImmutableList.of(),
                                             ImmutableList.of()))))),
-                        /* lowerBound= */ null,
                         ImmutableList.of()),
-                    new TyVarSymbol(new MethodSymbol(-1, new ClassSymbol("test/Test"), "g"), "E"),
+                    new TyVarSymbol(new MethodSymbol(new ClassSymbol("test/Test"), "g"), "E"),
                     new SourceTypeBoundClass.TyVarInfo(
                         IntersectionTy.create(
                             ImmutableList.of(
@@ -146,20 +143,17 @@ public class LowerTest {
                                             new ClassSymbol("java/lang/Error"),
                                             ImmutableList.of(),
                                             ImmutableList.of()))))),
-                        /* lowerBound= */ null,
                         ImmutableList.of())),
                 Type.VOID,
                 ImmutableList.of(
                     new SourceTypeBoundClass.ParamInfo(
-                        new ParamSymbol(
-                            new MethodSymbol(-1, new ClassSymbol("test/Test"), "g"), "foo"),
                         PrimTy.create(TurbineConstantTypeKind.INT, ImmutableList.of()),
+                        "foo",
                         ImmutableList.of(),
                         0)),
                 ImmutableList.of(
                     TyVar.create(
-                        new TyVarSymbol(
-                            new MethodSymbol(-1, new ClassSymbol("test/Test"), "g"), "E"),
+                        new TyVarSymbol(new MethodSymbol(new ClassSymbol("test/Test"), "g"), "E"),
                         ImmutableList.of())),
                 TurbineFlag.ACC_PUBLIC,
                 null,
@@ -356,7 +350,7 @@ public class LowerTest {
                       int typeRef, TypePath typePath, String desc, boolean visible) {
                     path[0] = typePath;
                     return null;
-                  }
+                  };
                 };
               }
             },
@@ -610,10 +604,9 @@ public class LowerTest {
       assertThat(error)
           .hasMessageThat()
           .contains(
-              lines(
-                  "Test.java:3: error: could not locate class file for A",
-                  "     I i;",
-                  "       ^"));
+              "Test.java:3: error: could not locate class file for A\n"
+                  + "     I i;\n"
+                  + "       ^");
     }
   }
 
@@ -647,6 +640,6 @@ public class LowerTest {
   }
 
   static String lines(String... lines) {
-    return Joiner.on(System.lineSeparator()).join(lines);
+    return Joiner.on("\n").join(lines);
   }
 }

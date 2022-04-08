@@ -19,10 +19,9 @@ package com.google.turbine.bytecode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.errorprone.annotations.CheckReturnValue;
-import com.google.errorprone.annotations.FormatMethod;
 import com.google.turbine.bytecode.ClassFile.AnnotationInfo;
 import com.google.turbine.bytecode.ClassFile.AnnotationInfo.ElementValue;
-import com.google.turbine.bytecode.ClassFile.AnnotationInfo.ElementValue.ConstTurbineAnnotationValue;
+import com.google.turbine.bytecode.ClassFile.AnnotationInfo.ElementValue.AnnotationValue;
 import com.google.turbine.bytecode.ClassFile.AnnotationInfo.ElementValue.ConstTurbineClassValue;
 import com.google.turbine.bytecode.ClassFile.AnnotationInfo.ElementValue.ConstValue;
 import com.google.turbine.bytecode.ClassFile.AnnotationInfo.ElementValue.EnumConstValue;
@@ -34,7 +33,6 @@ import com.google.turbine.bytecode.ClassFile.ModuleInfo.ProvideInfo;
 import com.google.turbine.bytecode.ClassFile.ModuleInfo.RequireInfo;
 import com.google.turbine.bytecode.ClassFile.ModuleInfo.UseInfo;
 import com.google.turbine.model.Const;
-import com.google.turbine.model.TurbineFlag;
 import java.util.ArrayList;
 import java.util.List;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -61,7 +59,6 @@ public class ClassReader {
     this.reader = new ByteReader(bytes, 0);
   }
 
-  @FormatMethod
   @CheckReturnValue
   Error error(String format, Object... args) {
     StringBuilder sb = new StringBuilder();
@@ -75,7 +72,7 @@ public class ClassReader {
   private ClassFile read() {
     int magic = reader.u4();
     if (magic != 0xcafebabe) {
-      throw error("bad magic: 0x%x", magic);
+      throw error("bad magic: 0x%x", path, magic);
     }
     int minorVersion = reader.u2();
     int majorVersion = reader.u2();
@@ -215,11 +212,6 @@ public class ClassReader {
     for (int i = 0; i < numParameters; i++) {
       String name = constantPool.utf8(reader.u2());
       int access = reader.u2();
-      if ((access & (TurbineFlag.ACC_SYNTHETIC | TurbineFlag.ACC_MANDATED)) != 0) {
-        // ExecutableElement#getParameters doesn't expect synthetic or mandated
-        // parameters
-        continue;
-      }
       parameters.add(new ParameterInfo(name, access));
     }
   }
@@ -329,22 +321,17 @@ public class ClassReader {
     int tag = reader.u1();
     switch (tag) {
       case 'B':
-        return new ConstValue(readConst(constantPool).asByte());
       case 'C':
-        return new ConstValue(readConst(constantPool).asChar());
-      case 'S':
-        return new ConstValue(readConst(constantPool).asShort());
       case 'D':
       case 'F':
       case 'I':
       case 'J':
-      case 's':
-        return new ConstValue(readConst(constantPool));
+      case 'S':
       case 'Z':
+      case 's':
         {
-          Const.Value value = readConst(constantPool);
-          // boolean constants are encoded as integers
-          return new ConstValue(new Const.BooleanValue(value.asInteger().value() != 0));
+          int constValueIndex = reader.u2();
+          return new ConstValue(constantPool.constant(constValueIndex));
         }
       case 'e':
         {
@@ -361,7 +348,7 @@ public class ClassReader {
           return new ConstTurbineClassValue(className);
         }
       case '@':
-        return new ConstTurbineAnnotationValue(readAnnotation(constantPool));
+        return new AnnotationValue(readAnnotation(constantPool));
       case '[':
         {
           int numValues = reader.u2();
@@ -374,11 +361,6 @@ public class ClassReader {
       default: // fall out
     }
     throw new AssertionError(String.format("bad tag value %c", tag));
-  }
-
-  private Const.Value readConst(ConstantPoolReader constantPool) {
-    int constValueIndex = reader.u2();
-    return constantPool.constant(constValueIndex);
   }
 
   /** Reads JVMS 4.6 method_infos. */
@@ -433,10 +415,6 @@ public class ClassReader {
       for (ImmutableList.Builder<AnnotationInfo> x : parameterAnnotationsBuilder) {
         parameterAnnotations.add(x.build());
       }
-      if ((accessFlags & (TurbineFlag.ACC_BRIDGE | TurbineFlag.ACC_SYNTHETIC)) != 0) {
-        // javac doesn't enter synthetic members for reasons 'lost to history', so we don't either
-        continue;
-      }
       methods.add(
           new ClassFile.MethodInfo(
               accessFlags,
@@ -476,21 +454,12 @@ public class ClassReader {
       String desc = constantPool.utf8(descriptorIndex);
       int attributesCount = reader.u2();
       Const.Value value = null;
-      ImmutableList.Builder<ClassFile.AnnotationInfo> annotations = ImmutableList.builder();
-      String signature = null;
       for (int j = 0; j < attributesCount; j++) {
         String attributeName = constantPool.utf8(reader.u2());
         switch (attributeName) {
           case "ConstantValue":
             reader.u4(); // length
             value = constantPool.constant(reader.u2());
-            break;
-          case "RuntimeInvisibleAnnotations":
-          case "RuntimeVisibleAnnotations":
-            readAnnotations(annotations, constantPool);
-            break;
-          case "Signature":
-            signature = readSignature(constantPool);
             break;
           default:
             reader.skip(reader.u4());
@@ -502,10 +471,10 @@ public class ClassReader {
               accessFlags,
               name,
               desc,
-              signature,
+              /*signature*/ null,
               value,
-              annotations.build(),
-              /* typeAnnotations= */ ImmutableList.of()));
+              ImmutableList.of(),
+              ImmutableList.of()));
     }
     return fields;
   }

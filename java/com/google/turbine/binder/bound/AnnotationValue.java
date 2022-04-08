@@ -19,20 +19,22 @@ package com.google.turbine.binder.bound;
 import com.google.common.collect.ImmutableMap;
 import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.model.Const;
-import com.google.turbine.type.AnnoInfo;
+import java.util.Objects;
 
 /** An annotation literal constant. */
-public class TurbineAnnotationValue extends Const {
+public class AnnotationValue extends Const {
 
-  private final AnnoInfo info;
+  private final ClassSymbol sym;
+  private final ImmutableMap<String, Const> values;
 
-  public TurbineAnnotationValue(AnnoInfo info) {
-    this.info = info;
+  public AnnotationValue(ClassSymbol sym, ImmutableMap<String, Const> values) {
+    this.sym = sym;
+    this.values = values;
   }
 
   @Override
   public String toString() {
-    return info.toString();
+    return String.format("@%s", sym);
   }
 
   @Override
@@ -42,26 +44,25 @@ public class TurbineAnnotationValue extends Const {
 
   /** The annotation declaration. */
   public ClassSymbol sym() {
-    return info.sym();
+    return sym;
   }
 
   /** The annotation literal's element-value pairs. */
   public ImmutableMap<String, Const> values() {
-    return info.values();
+    return values;
   }
 
   @Override
   public int hashCode() {
-    return info.hashCode();
+    return Objects.hash(sym, values);
   }
 
   @Override
   public boolean equals(Object obj) {
-    return obj instanceof TurbineAnnotationValue
-        && info().equals(((TurbineAnnotationValue) obj).info());
-  }
-
-  public AnnoInfo info() {
-    return info;
+    if (!(obj instanceof AnnotationValue)) {
+      return false;
+    }
+    AnnotationValue that = (AnnotationValue) obj;
+    return sym().equals(that.sym()) && values().equals(that.values());
   }
 }

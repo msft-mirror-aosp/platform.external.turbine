@@ -16,24 +16,11 @@
 
 package com.google.turbine.diag;
 
-import com.google.common.base.Supplier;
-import com.google.common.base.Suppliers;
-import java.util.Objects;
-
 /** A source file. */
 public class SourceFile {
 
   private final String path;
   private final String source;
-
-  private final Supplier<LineMap> lineMap =
-      Suppliers.memoize(
-          new Supplier<LineMap>() {
-            @Override
-            public LineMap get() {
-              return LineMap.create(source);
-            }
-          });
 
   public SourceFile(String path, String source) {
     this.path = path;
@@ -48,23 +35,5 @@ public class SourceFile {
   /** The source. */
   public String source() {
     return source;
-  }
-
-  LineMap lineMap() {
-    return lineMap.get();
-  }
-
-  @Override
-  public boolean equals(Object obj) {
-    if (!(obj instanceof SourceFile)) {
-      return false;
-    }
-    SourceFile that = (SourceFile) obj;
-    return Objects.equals(path, that.path) && source.equals(that.source);
-  }
-
-  @Override
-  public int hashCode() {
-    return path != null ? path.hashCode() : 0;
   }
 }

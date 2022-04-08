@@ -219,7 +219,6 @@ public class CompUnitPreprocessor {
         Optional.empty(),
         ImmutableList.of(),
         ImmutableList.of(),
-        TurbineTyKind.INTERFACE,
-        /* javadoc= */ null);
+        TurbineTyKind.INTERFACE);
   }
 }

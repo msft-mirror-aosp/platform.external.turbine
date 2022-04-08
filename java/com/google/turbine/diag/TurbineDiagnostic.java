@@ -16,6 +16,7 @@
 
 package com.google.turbine.diag;
 
+import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static java.util.Objects.requireNonNull;
@@ -26,29 +27,18 @@ import com.google.common.collect.ImmutableList;
 import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.diag.TurbineError.ErrorKind;
 import java.util.Objects;
-import javax.tools.Diagnostic;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** A compilation error. */
 public class TurbineDiagnostic {
 
-  private final Diagnostic.Kind severity;
   private final ErrorKind kind;
+  private final String diagnostic;
   private final ImmutableList<Object> args;
-  private final @Nullable SourceFile source;
-  private final int position;
 
-  private TurbineDiagnostic(
-      Diagnostic.Kind severity,
-      ErrorKind kind,
-      ImmutableList<Object> args,
-      @Nullable SourceFile source,
-      int position) {
-    this.severity = requireNonNull(severity);
+  private TurbineDiagnostic(ErrorKind kind, String diagnostic, ImmutableList<Object> args) {
     this.kind = requireNonNull(kind);
+    this.diagnostic = requireNonNull(diagnostic);
     this.args = requireNonNull(args);
-    this.source = source;
-    this.position = position;
   }
 
   /** The diagnostic kind. */
@@ -56,28 +46,9 @@ public class TurbineDiagnostic {
     return kind;
   }
 
-  /**
-   * The diagnostic severity (error, warning, ...). Turbine only produces errors, non-error
-   * diagnostics are only ever created by annotation processors.
-   */
-  public Diagnostic.Kind severity() {
-    return severity;
-  }
-
   /** The diagnostic message. */
   public String diagnostic() {
-    StringBuilder sb = new StringBuilder(path());
-    if (line() != -1) {
-      sb.append(':').append(line());
-    }
-    sb.append(": error: ");
-    sb.append(message().trim()).append(System.lineSeparator());
-    if (line() != -1 && column() != -1) {
-      sb.append(CharMatcher.breakingWhitespace().trimTrailingFrom(source.lineMap().line(position)))
-          .append(System.lineSeparator());
-      sb.append(Strings.repeat(" ", column() - 1)).append('^');
-    }
-    return sb.toString();
+    return diagnostic;
   }
 
   /** The diagnostic arguments. */
@@ -86,28 +57,20 @@ public class TurbineDiagnostic {
   }
 
   private static TurbineDiagnostic create(
-      Diagnostic.Kind severity,
-      ErrorKind kind,
-      ImmutableList<Object> args,
-      SourceFile source,
-      int position) {
+      ErrorKind kind, String diagnostic, ImmutableList<Object> args) {
     switch (kind) {
       case SYMBOL_NOT_FOUND:
         {
           checkArgument(
               args.size() == 1 && getOnlyElement(args) instanceof ClassSymbol,
-              "diagnostic (%s) has invalid argument %s",
-              kind,
+              "diagnostic (%s) has invalid argument args %s",
+              diagnostic,
               args);
           break;
         }
       default: // fall out
     }
-    return new TurbineDiagnostic(severity, kind, args, source, position);
-  }
-
-  public static TurbineDiagnostic format(Diagnostic.Kind severity, ErrorKind kind, String message) {
-    return create(severity, kind, ImmutableList.of(message), null, -1);
+    return new TurbineDiagnostic(kind, diagnostic, args);
   }
 
   /**
@@ -118,7 +81,10 @@ public class TurbineDiagnostic {
    * @param args format args
    */
   public static TurbineDiagnostic format(SourceFile source, ErrorKind kind, Object... args) {
-    return create(Diagnostic.Kind.ERROR, kind, ImmutableList.copyOf(args), source, -1);
+    String path = firstNonNull(source.path(), "<>");
+    String message = kind.format(args);
+    String diagnostic = path + ": error: " + message.trim() + System.lineSeparator();
+    return create(kind, diagnostic, ImmutableList.copyOf(args));
   }
 
   /**
@@ -129,13 +95,26 @@ public class TurbineDiagnostic {
    * @param args format args
    */
   public static TurbineDiagnostic format(
-      Diagnostic.Kind severity, SourceFile source, int position, ErrorKind kind, Object... args) {
-    return create(severity, kind, ImmutableList.copyOf(args), source, position);
+      SourceFile source, int position, ErrorKind kind, Object... args) {
+    String path = firstNonNull(source.path(), "<>");
+    LineMap lineMap = LineMap.create(source.source());
+    int lineNumber = lineMap.lineNumber(position);
+    int column = lineMap.column(position);
+    String message = kind.format(args);
+
+    StringBuilder sb = new StringBuilder(path).append(":");
+    sb.append(lineNumber).append(": error: ");
+    sb.append(message.trim()).append(System.lineSeparator());
+    sb.append(CharMatcher.breakingWhitespace().trimTrailingFrom(lineMap.line(position)))
+        .append(System.lineSeparator());
+    sb.append(Strings.repeat(" ", column)).append('^');
+    String diagnostic = sb.toString();
+    return create(kind, diagnostic, ImmutableList.copyOf(args));
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(kind, source, position);
+    return Objects.hash(diagnostic, kind);
   }
 
   @Override
@@ -144,26 +123,6 @@ public class TurbineDiagnostic {
       return false;
     }
     TurbineDiagnostic that = (TurbineDiagnostic) obj;
-    return severity.equals(that.severity)
-        && kind.equals(that.kind)
-        && args.equals(that.args)
-        && Objects.equals(source, that.source)
-        && position == that.position;
-  }
-
-  public String path() {
-    return source != null && source.path() != null ? source.path() : "<>";
-  }
-
-  public int line() {
-    return position != -1 ? source.lineMap().lineNumber(position) : -1;
-  }
-
-  public int column() {
-    return position != -1 ? source.lineMap().column(position) + 1 : -1;
-  }
-
-  public String message() {
-    return kind.format(args.toArray());
+    return diagnostic.equals(that.diagnostic) && kind.equals(that.kind);
   }
 }

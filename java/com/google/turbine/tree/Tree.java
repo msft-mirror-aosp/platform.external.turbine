@@ -661,7 +661,6 @@ public abstract class Tree {
     private final Tree ty;
     private final Ident name;
     private final Optional<Expression> init;
-    private final String javadoc;
 
     public VarDecl(
         int position,
@@ -669,15 +668,13 @@ public abstract class Tree {
         ImmutableList<Anno> annos,
         Tree ty,
         Ident name,
-        Optional<Expression> init,
-        String javadoc) {
+        Optional<Expression> init) {
       super(position);
       this.mods = ImmutableSet.copyOf(mods);
       this.annos = annos;
       this.ty = ty;
       this.name = name;
       this.init = init;
-      this.javadoc = javadoc;
     }
 
     @Override
@@ -709,14 +706,6 @@ public abstract class Tree {
     public Optional<Expression> init() {
       return init;
     }
-
-    /**
-     * A javadoc comment, excluding the opening and closing delimiters but including all interior
-     * characters and whitespace.
-     */
-    public String javadoc() {
-      return javadoc;
-    }
   }
 
   /** A JLS 8.4 method declaration. */
@@ -729,7 +718,6 @@ public abstract class Tree {
     private final ImmutableList<VarDecl> params;
     private final ImmutableList<ClassTy> exntys;
     private final Optional<Tree> defaultValue;
-    private final String javadoc;
 
     public MethDecl(
         int position,
@@ -740,8 +728,7 @@ public abstract class Tree {
         Ident name,
         ImmutableList<VarDecl> params,
         ImmutableList<ClassTy> exntys,
-        Optional<Tree> defaultValue,
-        String javadoc) {
+        Optional<Tree> defaultValue) {
       super(position);
       this.mods = ImmutableSet.copyOf(mods);
       this.annos = annos;
@@ -751,7 +738,6 @@ public abstract class Tree {
       this.params = params;
       this.exntys = exntys;
       this.defaultValue = defaultValue;
-      this.javadoc = javadoc;
     }
 
     @Override
@@ -794,13 +780,6 @@ public abstract class Tree {
 
     public Optional<Tree> defaultValue() {
       return defaultValue;
-    }
-    /**
-     * A javadoc comment, excluding the opening and closing delimiters but including all interior
-     * characters and whitespace.
-     */
-    public String javadoc() {
-      return javadoc;
     }
   }
 
@@ -873,7 +852,6 @@ public abstract class Tree {
     private final ImmutableList<ClassTy> impls;
     private final ImmutableList<Tree> members;
     private final TurbineTyKind tykind;
-    private final String javadoc;
 
     public TyDecl(
         int position,
@@ -884,8 +862,7 @@ public abstract class Tree {
         Optional<ClassTy> xtnds,
         ImmutableList<ClassTy> impls,
         ImmutableList<Tree> members,
-        TurbineTyKind tykind,
-        String javadoc) {
+        TurbineTyKind tykind) {
       super(position);
       this.mods = ImmutableSet.copyOf(mods);
       this.annos = annos;
@@ -895,7 +872,6 @@ public abstract class Tree {
       this.impls = impls;
       this.members = members;
       this.tykind = tykind;
-      this.javadoc = javadoc;
     }
 
     @Override
@@ -938,13 +914,6 @@ public abstract class Tree {
 
     public TurbineTyKind tykind() {
       return tykind;
-    }
-    /**
-     * A javadoc comment, excluding the opening and closing delimiters but including all interior
-     * characters and whitespace.
-     */
-    public String javadoc() {
-      return javadoc;
     }
   }
 

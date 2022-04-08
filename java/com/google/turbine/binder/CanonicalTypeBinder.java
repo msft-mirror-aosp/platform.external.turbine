@@ -147,8 +147,8 @@ public class CanonicalTypeBinder {
       ClassSymbol sym,
       ParamInfo base) {
     return new ParamInfo(
-        base.sym(),
         Canonicalize.canonicalize(source, position, env, sym, base.type()),
+        base.name(),
         base.annotations(),
         base.access());
   }
@@ -162,9 +162,8 @@ public class CanonicalTypeBinder {
     ImmutableMap.Builder<TyVarSymbol, TyVarInfo> result = ImmutableMap.builder();
     for (Map.Entry<TyVarSymbol, TyVarInfo> e : tps.entrySet()) {
       TyVarInfo info = e.getValue();
-      IntersectionTy upperBound =
-          (IntersectionTy) Canonicalize.canonicalize(source, position, env, sym, info.upperBound());
-      result.put(e.getKey(), new TyVarInfo(upperBound, /* lowerBound= */ null, info.annotations()));
+      Type bound = Canonicalize.canonicalize(source, position, env, sym, info.bound());
+      result.put(e.getKey(), new TyVarInfo((IntersectionTy) bound, info.annotations()));
     }
     return result.build();
   }

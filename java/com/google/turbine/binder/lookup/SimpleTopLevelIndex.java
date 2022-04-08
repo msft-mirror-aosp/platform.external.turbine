@@ -16,8 +16,6 @@
 
 package com.google.turbine.binder.lookup;
 
-import com.google.common.base.Supplier;
-import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.turbine.binder.sym.ClassSymbol;
 import java.util.HashMap;
@@ -159,7 +157,7 @@ public class SimpleTopLevelIndex implements TopLevelIndex {
 
   /** Returns a {@link Scope} that performs lookups in the given qualified package name. */
   @Override
-  public PackageScope lookupPackage(Iterable<String> packagename) {
+  public Scope lookupPackage(ImmutableList<String> packagename) {
     Node curr = root;
     for (String bit : packagename) {
       curr = curr.lookup(bit);
@@ -170,7 +168,7 @@ public class SimpleTopLevelIndex implements TopLevelIndex {
     return new PackageIndex(curr);
   }
 
-  static class PackageIndex implements PackageScope {
+  static class PackageIndex implements Scope {
 
     private final Node node;
 
@@ -185,26 +183,6 @@ public class SimpleTopLevelIndex implements TopLevelIndex {
         return new LookupResult(result.sym, lookupKey);
       }
       return null;
-    }
-
-    private final Supplier<ImmutableList<ClassSymbol>> classes =
-        Suppliers.memoize(
-            new Supplier<ImmutableList<ClassSymbol>>() {
-              @Override
-              public ImmutableList<ClassSymbol> get() {
-                ImmutableList.Builder<ClassSymbol> result = ImmutableList.builder();
-                for (Node child : node.children.values()) {
-                  if (child.sym != null) {
-                    result.add(child.sym);
-                  }
-                }
-                return result.build();
-              }
-            });
-
-    @Override
-    public Iterable<ClassSymbol> classes() {
-      return classes.get();
     }
   }
 }

@@ -61,6 +61,6 @@ public class FieldSymbol implements Symbol {
 
   @Override
   public String toString() {
-    return name;
+    return owner + "#" + name;
   }
 }

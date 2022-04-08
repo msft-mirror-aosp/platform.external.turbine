@@ -16,19 +16,12 @@
 
 package com.google.turbine.model;
 
-import static com.google.common.truth.Truth.assertThat;
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.testing.EqualsTester;
-import com.google.turbine.binder.bound.EnumConstantValue;
-import com.google.turbine.binder.bound.TurbineAnnotationValue;
+import com.google.turbine.binder.bound.AnnotationValue;
 import com.google.turbine.binder.bound.TurbineClassValue;
 import com.google.turbine.binder.sym.ClassSymbol;
-import com.google.turbine.binder.sym.FieldSymbol;
-import com.google.turbine.model.Const.ArrayInitValue;
-import com.google.turbine.model.Const.IntValue;
-import com.google.turbine.type.AnnoInfo;
 import com.google.turbine.type.Type.ClassTy;
 import com.google.turbine.type.Type.PrimTy;
 import org.junit.Test;
@@ -69,31 +62,15 @@ public class ConstTest {
             new Const.ArrayInitValue(
                 ImmutableList.of(new Const.IntValue(3), new Const.IntValue(4))))
         .addEqualityGroup(
-            new TurbineAnnotationValue(
-                new AnnoInfo(
-                    null,
-                    new ClassSymbol("test/Anno"),
-                    null,
-                    ImmutableMap.of("value", new Const.IntValue(3)))),
-            new TurbineAnnotationValue(
-                new AnnoInfo(
-                    null,
-                    new ClassSymbol("test/Anno"),
-                    null,
-                    ImmutableMap.of("value", new Const.IntValue(3)))))
+            new AnnotationValue(
+                new ClassSymbol("test/Anno"), ImmutableMap.of("value", new Const.IntValue(3))),
+            new AnnotationValue(
+                new ClassSymbol("test/Anno"), ImmutableMap.of("value", new Const.IntValue(3))))
         .addEqualityGroup(
-            new TurbineAnnotationValue(
-                new AnnoInfo(
-                    null,
-                    new ClassSymbol("test/Anno"),
-                    null,
-                    ImmutableMap.of("value", new Const.IntValue(4)))),
-            new TurbineAnnotationValue(
-                new AnnoInfo(
-                    null,
-                    new ClassSymbol("test/Anno"),
-                    null,
-                    ImmutableMap.of("value", new Const.IntValue(4)))))
+            new AnnotationValue(
+                new ClassSymbol("test/Anno"), ImmutableMap.of("value", new Const.IntValue(4))),
+            new AnnotationValue(
+                new ClassSymbol("test/Anno"), ImmutableMap.of("value", new Const.IntValue(4))))
         .addEqualityGroup(
             new TurbineClassValue(ClassTy.asNonParametricClassTy(new ClassSymbol("test/Clazz"))),
             new TurbineClassValue(ClassTy.asNonParametricClassTy(new ClassSymbol("test/Clazz"))))
@@ -104,38 +81,5 @@ public class ConstTest {
             new TurbineClassValue(PrimTy.create(TurbineConstantTypeKind.INT, ImmutableList.of())),
             new TurbineClassValue(PrimTy.create(TurbineConstantTypeKind.INT, ImmutableList.of())))
         .testEquals();
-  }
-
-  @Test
-  public void toStringTest() {
-    assertThat(new Const.CharValue('\t').toString()).isEqualTo("\'\\t\'");
-    assertThat(new EnumConstantValue(new FieldSymbol(new ClassSymbol("Foo"), "CONST")).toString())
-        .isEqualTo("CONST");
-    assertThat(makeAnno(ImmutableMap.of())).isEqualTo("@p.Anno");
-    assertThat(makeAnno(ImmutableMap.of("value", new IntValue(1)))).isEqualTo("@p.Anno(1)");
-    assertThat(makeAnno(ImmutableMap.of("x", new IntValue(1)))).isEqualTo("@p.Anno(x=1)");
-    assertThat(
-            makeAnno(
-                ImmutableMap.of("value", new ArrayInitValue(ImmutableList.of(new IntValue(1))))))
-        .isEqualTo("@p.Anno({1})");
-    assertThat(
-            makeAnno(
-                ImmutableMap.of(
-                    "value",
-                    new ArrayInitValue(ImmutableList.of(new IntValue(1), new IntValue(2))))))
-        .isEqualTo("@p.Anno({1, 2})");
-    assertThat(
-            makeAnno(ImmutableMap.of("xs", new ArrayInitValue(ImmutableList.of(new IntValue(1))))))
-        .isEqualTo("@p.Anno(xs={1})");
-    assertThat(makeAnno(ImmutableMap.of("x", new IntValue(1), "y", new IntValue(2))))
-        .isEqualTo("@p.Anno(x=1, y=2)");
-    assertThat(new Const.StringValue("\"").toString()).isEqualTo("\"\\\"\"");
-    assertThat(new Const.ByteValue((byte) 42).toString()).isEqualTo("(byte)0x2a");
-    assertThat(new Const.ShortValue((short) 42).toString()).isEqualTo("42");
-  }
-
-  private static String makeAnno(ImmutableMap<String, Const> value) {
-    return new TurbineAnnotationValue(new AnnoInfo(null, new ClassSymbol("p/Anno"), null, value))
-        .toString();
   }
 }

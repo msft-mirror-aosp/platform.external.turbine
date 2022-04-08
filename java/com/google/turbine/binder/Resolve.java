@@ -136,11 +136,12 @@ public class Resolve {
           return true;
         case PROTECTED:
         case PACKAGE:
-          return Objects.equals(sym.packageName(), packagename);
+          return Objects.equals(packageName(sym), packagename);
         case PRIVATE:
           return false;
+        default:
+          throw new AssertionError(visibility);
       }
-      throw new AssertionError(visibility);
     }
   }
 
@@ -205,12 +206,24 @@ public class Resolve {
       case PROTECTED:
         return true;
       case PACKAGE:
-        return Objects.equals(owner.packageName(), origin.packageName());
+        return Objects.equals(packageName(owner), packageName(origin));
       case PRIVATE:
         // Private members of lexically enclosing declarations are not handled,
         // since this visibility check is only used for inherited members.
         return owner.equals(origin);
+      default:
+        throw new AssertionError(visibility);
     }
-    throw new AssertionError(visibility);
+  }
+
+  private static String packageName(ClassSymbol sym) {
+    if (sym == null) {
+      return null;
+    }
+    int idx = sym.binaryName().lastIndexOf('/');
+    if (idx == -1) {
+      return null;
+    }
+    return sym.binaryName().substring(0, idx);
   }
 }

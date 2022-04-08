@@ -22,17 +22,10 @@ import java.util.Objects;
 /** A method symbol. */
 @Immutable
 public class MethodSymbol implements Symbol {
-  /**
-   * The index of the method in its enclosing element. Used to implement equals and hashCode, since
-   * methods aren't uniquely identified by their name and owner.
-   */
-  private final int idx;
-
   private final ClassSymbol owner;
   private final String name;
 
-  public MethodSymbol(int idx, ClassSymbol owner, String name) {
-    this.idx = idx;
+  public MethodSymbol(ClassSymbol owner, String name) {
     this.owner = owner;
     this.name = name;
   }
@@ -63,7 +56,7 @@ public class MethodSymbol implements Symbol {
       return false;
     }
     MethodSymbol other = (MethodSymbol) obj;
-    return name().equals(other.name()) && owner().equals(other.owner()) && idx == other.idx;
+    return name().equals(other.name()) && owner().equals(other.owner());
   }
 
   @Override

@@ -501,6 +501,8 @@ public class Pretty implements Tree.Visitor<Void, Void> {
         case ACC_SYNTHETIC:
         case ACC_BRIDGE:
           break;
+        default:
+          throw new AssertionError(mod);
       }
     }
   }

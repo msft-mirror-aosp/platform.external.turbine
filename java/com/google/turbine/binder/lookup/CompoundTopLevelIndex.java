@@ -62,14 +62,14 @@ public class CompoundTopLevelIndex implements TopLevelIndex {
   }
 
   @Override
-  public PackageScope lookupPackage(Iterable<String> packagename) {
+  public Scope lookupPackage(ImmutableList<String> packagename) {
     // When returning package scopes, build up a compound scope containing entries from all
     // indices with matching packages.
-    PackageScope result = null;
+    CompoundScope result = null;
     for (TopLevelIndex index : indexes) {
-      PackageScope packageScope = index.lookupPackage(packagename);
+      Scope packageScope = index.lookupPackage(packagename);
       if (packageScope != null) {
-        result = result == null ? packageScope : result.append(packageScope);
+        result = result == null ? CompoundScope.base(packageScope) : result.append(packageScope);
       }
     }
     return result;

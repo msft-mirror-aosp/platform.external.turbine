@@ -16,9 +16,9 @@
 
 package com.google.turbine.parse;
 
-import static com.google.common.base.Verify.verify;
 import static com.google.turbine.parse.UnicodeEscapePreprocessor.ASCII_SUB;
 
+import com.google.common.base.Verify;
 import com.google.turbine.diag.SourceFile;
 import com.google.turbine.diag.TurbineError;
 import com.google.turbine.diag.TurbineError.ErrorKind;
@@ -40,9 +40,6 @@ public class StreamLexer implements Lexer {
   /** The value of the current string or character literal token. */
   private String value = null;
 
-  /** A saved javadoc comment. */
-  private String javadoc = null;
-
   public StreamLexer(UnicodeEscapePreprocessor reader) {
     this.reader = reader;
     eat();
@@ -62,17 +59,6 @@ public class StreamLexer implements Lexer {
   /** Consumes an input character. */
   private void eat() {
     ch = reader.next();
-  }
-
-  @Override
-  public String javadoc() {
-    String result = javadoc;
-    javadoc = null;
-    if (result == null) {
-      return null;
-    }
-    verify(result.endsWith("*/"), result);
-    return result.substring(0, result.length() - "*/".length());
   }
 
   @Override
@@ -125,51 +111,30 @@ public class StreamLexer implements Lexer {
                       }
                       eat();
                       break;
-                    default: // fall out
                   }
                 }
               case '*':
-                eat();
                 boolean sawStar = false;
-                boolean isJavadoc = false;
-                if (ch == '*') {
-                  eat();
-                  // handle empty non-javadoc comments: `/**/`
-                  if (ch == '/') {
-                    eat();
-                    continue OUTER;
-                  }
-                  isJavadoc = true;
-                  readFrom();
-                }
                 while (true) {
+                  eat();
                   switch (ch) {
                     case '*':
-                      eat();
                       sawStar = true;
                       break;
                     case '/':
-                      eat();
                       if (sawStar) {
-                        if (isJavadoc) {
-                          // Save the comment, excluding the leading `/**` and including
-                          // the trailing `/*`. The comment is trimmed and normalized later.
-                          javadoc = stringValue();
-                        }
+                        eat();
                         continue OUTER;
                       }
                       sawStar = false;
                       break;
                     case ASCII_SUB:
                       if (reader.done()) {
-                        throw TurbineError.format(
-                            reader.source(), position, ErrorKind.UNCLOSED_COMMENT);
+                        return Token.EOF;
                       }
                       eat();
-                      sawStar = false;
                       break;
                     default:
-                      eat();
                       sawStar = false;
                       break;
                   }
@@ -240,9 +205,7 @@ public class StreamLexer implements Lexer {
           return identifier();
 
         case ASCII_SUB:
-          if (!reader.done()) {
-            throw error(ErrorKind.UNEXPECTED_EOF);
-          }
+          Verify.verify(reader.done());
           return Token.EOF;
 
         case '-':
@@ -549,7 +512,6 @@ public class StreamLexer implements Lexer {
         eat();
         signedInteger();
         break;
-      default: // fall out
     }
     return floatTypeSuffix();
   }
@@ -564,7 +526,6 @@ public class StreamLexer implements Lexer {
         eat();
         signedInteger();
         break;
-      default: // fall out
     }
     return floatTypeSuffix();
   }
@@ -1028,7 +989,7 @@ public class StreamLexer implements Lexer {
     return makeIdent(stringValue());
   }
 
-  private static Token makeIdent(String s) {
+  private Token makeIdent(String s) {
     switch (s) {
       case "abstract":
         return Token.ABSTRACT;

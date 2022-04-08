@@ -40,6 +40,12 @@ public class LexerTest {
   }
 
   @Test
+  public void unterminated() {
+    assertThat(lex("/* foo")).containsExactly("EOF");
+    assertThat(lex("\" foo")).containsExactly("EOF");
+  }
+
+  @Test
   public void boolLiteral() {
     lexerComparisonTest("0b0101__01010");
     assertThat(lex("1 + 0b1000100101"))

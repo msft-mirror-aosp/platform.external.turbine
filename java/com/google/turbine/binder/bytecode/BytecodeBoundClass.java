@@ -32,7 +32,6 @@ import com.google.turbine.binder.env.Env;
 import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.binder.sym.FieldSymbol;
 import com.google.turbine.binder.sym.MethodSymbol;
-import com.google.turbine.binder.sym.ParamSymbol;
 import com.google.turbine.binder.sym.TyVarSymbol;
 import com.google.turbine.bytecode.ClassFile;
 import com.google.turbine.bytecode.ClassFile.AnnotationInfo;
@@ -333,8 +332,7 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
     for (Sig.TySig t : sig.interfaceBounds()) {
       bounds.add(BytecodeBinder.bindTy(t, scope));
     }
-    return new TyVarInfo(
-        IntersectionTy.create(bounds.build()), /* lowerBound= */ null, ImmutableList.of());
+    return new TyVarInfo(IntersectionTy.create(bounds.build()), ImmutableList.of());
   }
 
   @Override
@@ -352,17 +350,14 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
                 FieldSymbol fieldSym = new FieldSymbol(sym, cfi.name());
                 Type type =
                     BytecodeBinder.bindTy(
-                        new SigParser(firstNonNull(cfi.signature(), cfi.descriptor())).parseType(),
+                        new SigParser(cfi.descriptor()).parseType(),
                         makeScope(env, sym, ImmutableMap.of()));
                 int access = cfi.access();
                 Const.Value value = cfi.value();
                 if (value != null) {
                   value = BytecodeBinder.bindConstValue(type, value);
                 }
-                ImmutableList<AnnoInfo> annotations =
-                    BytecodeBinder.bindAnnotations(cfi.annotations());
-                fields.add(
-                    new FieldInfo(fieldSym, type, access, annotations, /* decl= */ null, value));
+                fields.add(new FieldInfo(fieldSym, type, access, ImmutableList.of(), null, value));
               }
               return fields.build();
             }
@@ -379,16 +374,15 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
             @Override
             public ImmutableList<MethodInfo> get() {
               ImmutableList.Builder<MethodInfo> methods = ImmutableList.builder();
-              int idx = 0;
               for (ClassFile.MethodInfo m : classFile.get().methods()) {
-                methods.add(bindMethod(idx++, m));
+                methods.add(bindMethod(m));
               }
               return methods.build();
             }
           });
 
-  private MethodInfo bindMethod(int methodIdx, ClassFile.MethodInfo m) {
-    MethodSymbol methodSymbol = new MethodSymbol(methodIdx, sym, m.name());
+  private MethodInfo bindMethod(ClassFile.MethodInfo m) {
+    MethodSymbol methodSymbol = new MethodSymbol(sym, m.name());
     Sig.MethodSig sig = new SigParser(firstNonNull(m.signature(), m.descriptor())).parseMethodSig();
 
     ImmutableMap<String, TyVarSymbol> tyParams;
@@ -420,43 +414,28 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
     ImmutableList.Builder<ParamInfo> formals = ImmutableList.builder();
     int idx = 0;
     for (Sig.TySig tySig : sig.params()) {
-      String name;
+      String name = null;
       int access = 0;
       if (idx < m.parameters().size()) {
         ParameterInfo paramInfo = m.parameters().get(idx);
         name = paramInfo.name();
-        // ignore parameter modifiers for bug-parity with javac:
-        // https://bugs.openjdk.java.net/browse/JDK-8226216
-        // access = paramInfo.access();
-      } else {
-        name = "arg" + idx;
+        access = paramInfo.access();
       }
       ImmutableList<AnnoInfo> annotations =
           (idx < m.parameterAnnotations().size())
               ? BytecodeBinder.bindAnnotations(m.parameterAnnotations().get(idx))
               : ImmutableList.of();
-      formals.add(
-          new ParamInfo(
-              new ParamSymbol(methodSymbol, name),
-              BytecodeBinder.bindTy(tySig, scope),
-              annotations,
-              access));
+      formals.add(new ParamInfo(BytecodeBinder.bindTy(tySig, scope), name, annotations, access));
       idx++;
     }
 
     ImmutableList.Builder<Type> exceptions = ImmutableList.builder();
-    if (!sig.exceptions().isEmpty()) {
-      for (TySig e : sig.exceptions()) {
-        exceptions.add(BytecodeBinder.bindTy(e, scope));
-      }
-    } else {
-      for (String e : m.exceptions()) {
-        exceptions.add(ClassTy.asNonParametricClassTy(new ClassSymbol(e)));
-      }
+    for (TySig e : sig.exceptions()) {
+      exceptions.add(BytecodeBinder.bindTy(e, scope));
     }
 
     Const defaultValue =
-        m.defaultValue() != null ? BytecodeBinder.bindValue(m.defaultValue()) : null;
+        m.defaultValue() != null ? BytecodeBinder.bindValue(ret, m.defaultValue()) : null;
 
     ImmutableList<AnnoInfo> annotations = BytecodeBinder.bindAnnotations(m.annotations());
 
@@ -508,7 +487,7 @@ public class BytecodeBoundClass implements BoundClass, HeaderBoundClass, TypeBou
             }
           });
 
-  private static RetentionPolicy bindRetention(AnnotationInfo annotation) {
+  private RetentionPolicy bindRetention(AnnotationInfo annotation) {
     ElementValue val = annotation.elementValuePairs().get("value");
     if (val.kind() != Kind.ENUM) {
       return null;
