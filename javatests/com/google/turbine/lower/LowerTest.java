@@ -41,6 +41,7 @@ import com.google.turbine.diag.TurbineError;
 import com.google.turbine.model.TurbineConstantTypeKind;
 import com.google.turbine.model.TurbineFlag;
 import com.google.turbine.model.TurbineTyKind;
+import com.google.turbine.options.LanguageVersion;
 import com.google.turbine.parse.Parser;
 import com.google.turbine.testing.AsmUtils;
 import com.google.turbine.type.Type;
@@ -184,9 +185,11 @@ public class LowerTest {
     SourceTypeBoundClass c =
         new SourceTypeBoundClass(
             interfaceTypes,
+            ImmutableList.of(),
             xtnds,
             tps,
             access,
+            ImmutableList.of(),
             methods,
             fields,
             owner,
@@ -204,9 +207,11 @@ public class LowerTest {
     SourceTypeBoundClass i =
         new SourceTypeBoundClass(
             ImmutableList.of(),
+            ImmutableList.of(),
             Type.ClassTy.OBJECT,
             ImmutableMap.of(),
             TurbineFlag.ACC_STATIC | TurbineFlag.ACC_PROTECTED,
+            ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of(),
             new ClassSymbol("test/Test"),
@@ -227,6 +232,7 @@ public class LowerTest {
 
     Map<String, byte[]> bytes =
         Lower.lowerAll(
+                LanguageVersion.createDefault(),
                 ImmutableMap.of(
                     new ClassSymbol("test/Test"), c, new ClassSymbol("test/Test$Inner"), i),
                 ImmutableList.of(),
@@ -256,7 +262,12 @@ public class LowerTest {
             TURBINE_BOOTCLASSPATH,
             /* moduleVersion=*/ Optional.empty());
     Map<String, byte[]> lowered =
-        Lower.lowerAll(bound.units(), bound.modules(), bound.classPathEnv()).bytes();
+        Lower.lowerAll(
+                LanguageVersion.createDefault(),
+                bound.units(),
+                bound.modules(),
+                bound.classPathEnv())
+            .bytes();
     List<String> attributes = new ArrayList<>();
     new ClassReader(lowered.get("Test$Inner$InnerMost"))
         .accept(
@@ -331,7 +342,12 @@ public class LowerTest {
             TURBINE_BOOTCLASSPATH,
             /* moduleVersion=*/ Optional.empty());
     Map<String, byte[]> lowered =
-        Lower.lowerAll(bound.units(), bound.modules(), bound.classPathEnv()).bytes();
+        Lower.lowerAll(
+                LanguageVersion.createDefault(),
+                bound.units(),
+                bound.modules(),
+                bound.classPathEnv())
+            .bytes();
     TypePath[] path = new TypePath[1];
     new ClassReader(lowered.get("Test"))
         .accept(
@@ -409,7 +425,12 @@ public class LowerTest {
             TURBINE_BOOTCLASSPATH,
             /* moduleVersion=*/ Optional.empty());
     Map<String, byte[]> lowered =
-        Lower.lowerAll(bound.units(), bound.modules(), bound.classPathEnv()).bytes();
+        Lower.lowerAll(
+                LanguageVersion.createDefault(),
+                bound.units(),
+                bound.modules(),
+                bound.classPathEnv())
+            .bytes();
     int[] acc = {0};
     new ClassReader(lowered.get("Test"))
         .accept(
@@ -477,7 +498,7 @@ public class LowerTest {
       ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
       sources.forEach(
           (k, v) -> builder.put(k, v.replaceAll("import static b\\.B\\.nosuch\\..*;", "")));
-      noImports = builder.build();
+      noImports = builder.buildOrThrow();
     }
 
     Map<String, byte[]> expected = IntegrationTestSupport.runJavac(noImports, ImmutableList.of());
@@ -619,6 +640,40 @@ public class LowerTest {
             0);
     assertThat((testAccess[0] & TurbineFlag.ACC_PUBLIC)).isEqualTo(TurbineFlag.ACC_PUBLIC);
     assertThat((testAccess[0] & TurbineFlag.ACC_PROTECTED)).isNotEqualTo(TurbineFlag.ACC_PROTECTED);
+  }
+
+  @Test
+  public void minClassVersion() throws Exception {
+    BindingResult bound =
+        Binder.bind(
+            ImmutableList.of(Parser.parse("class Test {}")),
+            ClassPathBinder.bindClasspath(ImmutableList.of()),
+            TURBINE_BOOTCLASSPATH,
+            /* moduleVersion=*/ Optional.empty());
+    Map<String, byte[]> lowered =
+        Lower.lowerAll(
+                LanguageVersion.fromJavacopts(ImmutableList.of("-source", "7", "-target", "7")),
+                bound.units(),
+                bound.modules(),
+                bound.classPathEnv())
+            .bytes();
+    int[] major = {0};
+    new ClassReader(lowered.get("Test"))
+        .accept(
+            new ClassVisitor(Opcodes.ASM9) {
+              @Override
+              public void visit(
+                  int version,
+                  int access,
+                  String name,
+                  String signature,
+                  String superName,
+                  String[] interfaces) {
+                major[0] = version;
+              }
+            },
+            0);
+    assertThat(major[0]).isEqualTo(Opcodes.V1_8);
   }
 
   static String lines(String... lines) {
