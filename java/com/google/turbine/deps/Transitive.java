@@ -33,7 +33,7 @@ import com.google.turbine.bytecode.ClassWriter;
 import com.google.turbine.model.TurbineFlag;
 import java.util.LinkedHashSet;
 import java.util.Set;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.nullness.Nullable;
 
 /**
  * Collects the minimal compile-time API for symbols in the supertype closure of compiled classes.
@@ -58,7 +58,7 @@ public final class Transitive {
       transitive.put(
           sym.binaryName(), ClassWriter.writeClass(trimClass(info.classFile(), info.jarFile())));
     }
-    return transitive.build();
+    return transitive.buildOrThrow();
   }
 
   /**
@@ -90,10 +90,12 @@ public final class Transitive {
     }
     return new ClassFile(
         cf.access(),
+        cf.majorVersion(),
         cf.name(),
         cf.signature(),
         cf.superName(),
         cf.interfaces(),
+        cf.permits(),
         // drop methods, except for annotations where we need to resolve key/value information
         (cf.access() & TurbineFlag.ACC_ANNOTATION) == TurbineFlag.ACC_ANNOTATION
             ? cf.methods()
@@ -105,6 +107,9 @@ public final class Transitive {
         innerClasses.build(),
         cf.typeAnnotations(),
         /* module= */ null,
+        /* nestHost= */ null,
+        /* nestMembers= */ ImmutableList.of(),
+        /* record= */ null,
         /* transitiveJar = */ transitiveJar);
   }
 
