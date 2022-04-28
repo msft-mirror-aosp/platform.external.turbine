@@ -32,7 +32,7 @@ import com.google.turbine.tree.Tree;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.nullness.Nullable;
 
 /** JLS 4 types. */
 public interface Type {
@@ -194,7 +194,7 @@ public interface Type {
     }
 
     @Override
-    public final boolean equals(Object obj) {
+    public final boolean equals(@Nullable Object obj) {
       if (!(obj instanceof ClassTy)) {
         return false;
       }
@@ -491,8 +491,7 @@ public interface Type {
     public abstract Type returnType();
 
     /** The type of the receiver parameter (see JLS 8.4.1). */
-    @Nullable
-    public abstract Type receiverType();
+    public abstract @Nullable Type receiverType();
 
     public abstract ImmutableList<Type> parameters();
 
@@ -577,7 +576,7 @@ public interface Type {
     }
 
     @Override
-    public final boolean equals(Object other) {
+    public final boolean equals(@Nullable Object other) {
       // The name associated with an error type is context for use in diagnostics or by annotations
       // processors. Two error types with the same name don't necessarily represent the same type.
 

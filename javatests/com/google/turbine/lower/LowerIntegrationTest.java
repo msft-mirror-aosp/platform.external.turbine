@@ -19,8 +19,10 @@ package com.google.turbine.lower;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.turbine.testing.TestResources.getResource;
 import static java.util.stream.Collectors.toList;
+import static org.junit.Assume.assumeTrue;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import java.io.IOError;
 import java.io.IOException;
@@ -41,6 +43,9 @@ import org.junit.runners.Parameterized.Parameters;
 @RunWith(Parameterized.class)
 public class LowerIntegrationTest {
 
+  private static final ImmutableMap<String, Integer> SOURCE_VERSION =
+      ImmutableMap.of("record.test", 16, "record2.test", 16, "sealed.test", 17);
+
   @Parameters(name = "{index}: {0}")
   public static Iterable<Object[]> parameters() {
     String[] testCases = {
@@ -55,6 +60,7 @@ public class LowerIntegrationTest {
       "B8148131.test",
       "abstractenum.test",
       "access1.test",
+      "ambiguous_identifier.test",
       "anno_const_coerce.test",
       "anno_const_scope.test",
       "anno_nested.test",
@@ -125,6 +131,7 @@ public class LowerIntegrationTest {
       "const_multi.test",
       "const_nonfinal.test",
       "const_octal_underscore.test",
+      "const_operation_order.test",
       "const_types.test",
       "const_underscore.test",
       "constlevel.test",
@@ -138,6 +145,7 @@ public class LowerIntegrationTest {
       "default_simple.test",
       "deficient_types_classfile.test",
       "dollar.test",
+      "empty_package_info.test",
       "enum1.test",
       "enum_abstract.test",
       "enum_final.test",
@@ -254,8 +262,11 @@ public class LowerIntegrationTest {
       "rawcanon.test",
       "rawfbound.test",
       "receiver_param.test",
+      "record.test",
+      "record2.test",
       "rek.test",
       "samepkg.test",
+      "sealed.test",
       "self.test",
       "semi.test",
       // https://bugs.openjdk.java.net/browse/JDK-8054064 ?
@@ -270,6 +281,7 @@ public class LowerIntegrationTest {
       "static_type_import.test",
       "strictfp.test",
       "string.test",
+      "string_const.test",
       "superabstract.test",
       "supplierfunction.test",
       "tbound.test",
@@ -363,9 +375,16 @@ public class LowerIntegrationTest {
       classpathJar = ImmutableList.of(lib);
     }
 
-    Map<String, byte[]> expected = IntegrationTestSupport.runJavac(input.sources, classpathJar);
+    int version = SOURCE_VERSION.getOrDefault(test, 8);
+    assumeTrue(version <= Runtime.version().feature());
+    ImmutableList<String> javacopts =
+        ImmutableList.of("-source", String.valueOf(version), "-target", String.valueOf(version));
 
-    Map<String, byte[]> actual = IntegrationTestSupport.runTurbine(input.sources, classpathJar);
+    Map<String, byte[]> expected =
+        IntegrationTestSupport.runJavac(input.sources, classpathJar, javacopts);
+
+    Map<String, byte[]> actual =
+        IntegrationTestSupport.runTurbine(input.sources, classpathJar, javacopts);
 
     assertThat(IntegrationTestSupport.dump(IntegrationTestSupport.sortMembers(actual)))
         .isEqualTo(IntegrationTestSupport.dump(IntegrationTestSupport.canonicalize(expected)));
