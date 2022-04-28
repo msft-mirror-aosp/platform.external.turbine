@@ -58,7 +58,7 @@ import com.google.turbine.type.Type.IntersectionTy;
 import java.lang.annotation.RetentionPolicy;
 import java.util.Map;
 import java.util.function.Function;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.nullness.Nullable;
 
 /**
  * A bound class backed by a class file.
@@ -137,9 +137,8 @@ public class BytecodeBoundClass implements TypeBoundClass {
             }
           });
 
-  @Nullable
   @Override
-  public ClassSymbol owner() {
+  public @Nullable ClassSymbol owner() {
     return owner.get();
   }
 
@@ -158,7 +157,7 @@ public class BytecodeBoundClass implements TypeBoundClass {
                   result.put(inner.innerName(), new ClassSymbol(inner.innerClass()));
                 }
               }
-              return result.build();
+              return result.buildOrThrow();
             }
           });
 
@@ -213,7 +212,7 @@ public class BytecodeBoundClass implements TypeBoundClass {
               for (Sig.TyParamSig p : csig.tyParams()) {
                 result.put(p.name(), new TyVarSymbol(sym, p.name()));
               }
-              return result.build();
+              return result.buildOrThrow();
             }
           });
 
@@ -307,6 +306,11 @@ public class BytecodeBoundClass implements TypeBoundClass {
     return interfaceTypes.get();
   }
 
+  @Override
+  public ImmutableList<ClassSymbol> permits() {
+    return ImmutableList.of();
+  }
+
   private final Supplier<ImmutableMap<TyVarSymbol, TyVarInfo>> typeParameterTypes =
       Suppliers.memoize(
           new Supplier<ImmutableMap<TyVarSymbol, TyVarInfo>>() {
@@ -321,7 +325,7 @@ public class BytecodeBoundClass implements TypeBoundClass {
                 // typeParameters() is constructed to guarantee the requireNonNull call is safe.
                 tparams.put(requireNonNull(typeParameters().get(p.name())), bindTyParam(p, scope));
               }
-              return tparams.build();
+              return tparams.buildOrThrow();
             }
           });
 
@@ -402,7 +406,7 @@ public class BytecodeBoundClass implements TypeBoundClass {
       for (Sig.TyParamSig p : sig.tyParams()) {
         result.put(p.name(), new TyVarSymbol(methodSymbol, p.name()));
       }
-      tyParams = result.build();
+      tyParams = result.buildOrThrow();
     }
 
     ImmutableMap<TyVarSymbol, TyVarInfo> tyParamTypes;
@@ -413,15 +417,12 @@ public class BytecodeBoundClass implements TypeBoundClass {
         // tyParams is constructed to guarantee the requireNonNull call is safe.
         tparams.put(requireNonNull(tyParams.get(p.name())), bindTyParam(p, scope));
       }
-      tyParamTypes = tparams.build();
+      tyParamTypes = tparams.buildOrThrow();
     }
 
     Function<String, TyVarSymbol> scope = makeScope(env, sym, tyParams);
 
-    Type ret = null;
-    if (sig.returnType() != null) {
-      ret = BytecodeBinder.bindTy(sig.returnType(), scope);
-    }
+    Type ret = BytecodeBinder.bindTy(sig.returnType(), scope);
 
     ImmutableList.Builder<ParamInfo> formals = ImmutableList.builder();
     int idx = 0;
@@ -488,6 +489,11 @@ public class BytecodeBoundClass implements TypeBoundClass {
   @Override
   public ImmutableList<MethodInfo> methods() {
     return methods.get();
+  }
+
+  @Override
+  public ImmutableList<RecordComponentInfo> components() {
+    return ImmutableList.of();
   }
 
   private final Supplier<@Nullable AnnotationMetadata> annotationMetadata =
