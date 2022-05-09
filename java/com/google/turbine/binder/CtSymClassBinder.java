@@ -24,7 +24,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.primitives.Ints;
 import com.google.turbine.binder.bound.ModuleInfo;
 import com.google.turbine.binder.bytecode.BytecodeBinder;
 import com.google.turbine.binder.bytecode.BytecodeBoundClass;
@@ -36,19 +35,19 @@ import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.binder.sym.ModuleSymbol;
 import com.google.turbine.zip.Zip;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.nullness.Nullable;
 
 /** Constructs a platform {@link ClassPath} from the current JDK's ct.sym file. */
 public final class CtSymClassBinder {
 
-  @Nullable
-  public static ClassPath bind(String version) throws IOException {
+  private static final int FEATURE_VERSION = Runtime.version().feature();
+
+  public static @Nullable ClassPath bind(int version) throws IOException {
     String javaHome = JAVA_HOME.value();
     requireNonNull(javaHome, "attempted to use --release, but JAVA_HOME is not set");
     Path ctSym = Paths.get(javaHome).resolve("lib/ct.sym");
@@ -60,7 +59,7 @@ public final class CtSymClassBinder {
     Env<ClassSymbol, BytecodeBoundClass> benv =
         new Env<ClassSymbol, BytecodeBoundClass>() {
           @Override
-          public BytecodeBoundClass get(ClassSymbol sym) {
+          public @Nullable BytecodeBoundClass get(ClassSymbol sym) {
             return map.get(sym);
           }
         };
@@ -81,7 +80,7 @@ public final class CtSymClassBinder {
       if (!ze.name().substring(0, idx).contains(releaseString)) {
         continue;
       }
-      if (isAtLeastJDK12()) {
+      if (FEATURE_VERSION >= 12) {
         // JDK >= 12 includes the module name as a prefix
         idx = name.indexOf('/', idx + 1);
       }
@@ -118,7 +117,7 @@ public final class CtSymClassBinder {
       }
 
       @Override
-      public Supplier<byte[]> resource(String input) {
+      public @Nullable Supplier<byte[]> resource(String input) {
         return null;
       }
     };
@@ -135,25 +134,11 @@ public final class CtSymClassBinder {
   }
 
   @VisibleForTesting
-  static String formatReleaseVersion(String version) {
-    Integer n = Ints.tryParse(version);
-    if (n == null || n <= 4 || n >= 36) {
-      throw new IllegalArgumentException("invalid release version: " + version);
+  static String formatReleaseVersion(int n) {
+    if (n <= 4 || n >= 36) {
+      throw new IllegalArgumentException("invalid release version: " + n);
     }
     return toUpperCase(Integer.toString(n, 36));
-  }
-
-  private static boolean isAtLeastJDK12() {
-    int major;
-    try {
-      Method versionMethod = Runtime.class.getMethod("version");
-      Object version = versionMethod.invoke(null);
-      major = (int) version.getClass().getMethod("major").invoke(version);
-    } catch (ReflectiveOperationException e) {
-      // `Runtime.version()` was added in JDK 9
-      return false;
-    }
-    return major >= 12;
   }
 
   private CtSymClassBinder() {}

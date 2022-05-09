@@ -55,5 +55,11 @@ public final class TurbineFlag {
   /** Synthetic constructors (e.g. of inner classes and enums). */
   public static final int ACC_SYNTH_CTOR = 1 << 18;
 
+  public static final int ACC_SEALED = 1 << 19;
+  public static final int ACC_NON_SEALED = 1 << 20;
+
+  /** Compact record constructor. */
+  public static final int ACC_COMPACT_CTOR = 1 << 21;
+
   private TurbineFlag() {}
 }

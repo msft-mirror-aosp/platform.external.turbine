@@ -40,7 +40,7 @@ import javax.lang.model.element.Element;
 import javax.tools.FileObject;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.nullness.Nullable;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -56,9 +56,8 @@ public class TurbineFilerTest {
   public void setup() {
     Function<String, Supplier<byte[]>> classpath =
         new Function<String, Supplier<byte[]>>() {
-          @Nullable
           @Override
-          public Supplier<byte[]> apply(String input) {
+          public @Nullable Supplier<byte[]> apply(String input) {
             return null;
           }
         };
@@ -100,9 +99,9 @@ public class TurbineFilerTest {
 
     assertThrows(
         FilerException.class, () -> filer.createSourceFile("com.foo.Bar", (Element[]) null));
-    filer.createSourceFile("com.foo.Baz", (Element[]) null);
+    JavaFileObject unused = filer.createSourceFile("com.foo.Baz", (Element[]) null);
 
-    filer.createClassFile("com.foo.Bar", (Element[]) null);
+    unused = filer.createClassFile("com.foo.Bar", (Element[]) null);
     assertThrows(
         FilerException.class, () -> filer.createClassFile("com.foo.Baz", (Element[]) null));
   }
@@ -125,7 +124,7 @@ public class TurbineFilerTest {
     try (Writer writer = classFile.openWriter()) {
       writer.write("hello");
     }
-    filer.finishRound();
+    Collection<SourceFile> unused = filer.finishRound();
 
     FileObject output = filer.getResource(StandardLocation.SOURCE_OUTPUT, "com.foo", "Bar.java");
     assertThat(new String(ByteStreams.toByteArray(output.openInputStream()), UTF_8))
@@ -140,7 +139,7 @@ public class TurbineFilerTest {
     try (OutputStream os = classFile.openOutputStream()) {
       os.write("goodbye".getBytes(UTF_8));
     }
-    filer.finishRound();
+    Collection<SourceFile> unused = filer.finishRound();
 
     FileObject output = filer.getResource(StandardLocation.CLASS_OUTPUT, "com.foo", "Baz.class");
     assertThat(new String(ByteStreams.toByteArray(output.openInputStream()), UTF_8))
