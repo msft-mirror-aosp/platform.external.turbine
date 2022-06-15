@@ -16,11 +16,8 @@
 
 package com.google.turbine.binder;
 
-import static com.google.common.base.Ascii.toUpperCase;
 import static com.google.common.base.StandardSystemProperty.JAVA_HOME;
-import static java.util.Objects.requireNonNull;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
@@ -40,17 +37,15 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
-import org.jspecify.nullness.Nullable;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Constructs a platform {@link ClassPath} from the current JDK's ct.sym file. */
-public final class CtSymClassBinder {
+public class CtSymClassBinder {
 
-  private static final int FEATURE_VERSION = Runtime.version().feature();
-
-  public static @Nullable ClassPath bind(int version) throws IOException {
-    String javaHome = JAVA_HOME.value();
-    requireNonNull(javaHome, "attempted to use --release, but JAVA_HOME is not set");
-    Path ctSym = Paths.get(javaHome).resolve("lib/ct.sym");
+  @Nullable
+  public static ClassPath bind(String version) throws IOException {
+    Path javaHome = Paths.get(JAVA_HOME.value());
+    Path ctSym = javaHome.resolve("lib/ct.sym");
     if (!Files.exists(ctSym)) {
       throw new IllegalStateException("lib/ct.sym does not exist in " + javaHome);
     }
@@ -59,14 +54,12 @@ public final class CtSymClassBinder {
     Env<ClassSymbol, BytecodeBoundClass> benv =
         new Env<ClassSymbol, BytecodeBoundClass>() {
           @Override
-          public @Nullable BytecodeBoundClass get(ClassSymbol sym) {
+          public BytecodeBoundClass get(ClassSymbol sym) {
             return map.get(sym);
           }
         };
     // ct.sym contains directories whose names are the concatentation of a list of target versions
-    // formatted as a single character 0-9 or A-Z (e.g. 789A) and which contain interface class
-    // files with a .sig extension.
-    String releaseString = formatReleaseVersion(version);
+    // (e.g. 789) and which contain interface class files with a .sig extension.
     for (Zip.Entry ze : new Zip.ZipIterable(ctSym)) {
       String name = ze.name();
       if (!name.endsWith(".sig")) {
@@ -77,12 +70,9 @@ public final class CtSymClassBinder {
         continue;
       }
       // check if the directory matches the desired release
-      if (!ze.name().substring(0, idx).contains(releaseString)) {
+      // TODO(cushon): what happens when version numbers contain more than one digit?
+      if (!ze.name().substring(0, idx).contains(version)) {
         continue;
-      }
-      if (FEATURE_VERSION >= 12) {
-        // JDK >= 12 includes the module name as a prefix
-        idx = name.indexOf('/', idx + 1);
       }
       if (name.substring(name.lastIndexOf('/') + 1).equals("module-info.sig")) {
         ModuleInfo moduleInfo = BytecodeBinder.bindModuleInfo(name, toByteArrayOrDie(ze));
@@ -117,7 +107,7 @@ public final class CtSymClassBinder {
       }
 
       @Override
-      public @Nullable Supplier<byte[]> resource(String input) {
+      public Supplier<byte[]> resource(String input) {
         return null;
       }
     };
@@ -132,14 +122,4 @@ public final class CtSymClassBinder {
           }
         });
   }
-
-  @VisibleForTesting
-  static String formatReleaseVersion(int n) {
-    if (n <= 4 || n >= 36) {
-      throw new IllegalArgumentException("invalid release version: " + n);
-    }
-    return toUpperCase(Integer.toString(n, 36));
-  }
-
-  private CtSymClassBinder() {}
 }

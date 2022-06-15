@@ -17,7 +17,6 @@
 package com.google.turbine.bytecode.sig;
 
 import com.google.common.collect.ImmutableList;
-import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.turbine.bytecode.sig.Sig.ArrayTySig;
 import com.google.turbine.bytecode.sig.Sig.BaseTySig;
 import com.google.turbine.bytecode.sig.Sig.ClassSig;
@@ -47,7 +46,6 @@ public class SigParser {
   }
 
   /** Returns the next character and advances. */
-  @CanIgnoreReturnValue
   char eat() {
     return sig.charAt(idx++);
   }

@@ -20,8 +20,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.errorprone.annotations.CanIgnoreReturnValue;
-import com.google.turbine.model.TurbineTyKind;
 import com.google.turbine.tree.Tree.Anno;
 import com.google.turbine.tree.Tree.ClassLiteral;
 import com.google.turbine.tree.Tree.Ident;
@@ -35,10 +33,9 @@ import com.google.turbine.tree.Tree.ModUses;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import org.jspecify.nullness.Nullable;
 
 /** A pretty-printer for {@link Tree}s. */
-public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
+public class Pretty implements Tree.Visitor<Void, Void> {
 
   static String pretty(Tree tree) {
     Pretty pretty = new Pretty();
@@ -63,7 +60,6 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
     newLine = true;
   }
 
-  @CanIgnoreReturnValue
   Pretty append(char c) {
     if (c == '\n') {
       newLine = true;
@@ -75,7 +71,6 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
     return this;
   }
 
-  @CanIgnoreReturnValue
   Pretty append(String s) {
     if (newLine) {
       sb.append(Strings.repeat(" ", indent * 2));
@@ -86,13 +81,13 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitIdent(Ident ident, @Nullable Void input) {
+  public Void visitIdent(Ident ident, Void input) {
     sb.append(ident.value());
     return null;
   }
 
   @Override
-  public @Nullable Void visitWildTy(Tree.WildTy wildTy, @Nullable Void input) {
+  public Void visitWildTy(Tree.WildTy wildTy, Void input) {
     printAnnos(wildTy.annos());
     append('?');
     if (wildTy.lower().isPresent()) {
@@ -107,7 +102,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitArrTy(Tree.ArrTy arrTy, @Nullable Void input) {
+  public Void visitArrTy(Tree.ArrTy arrTy, Void input) {
     arrTy.elem().accept(this, null);
     if (!arrTy.annos().isEmpty()) {
       append(' ');
@@ -118,19 +113,19 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitPrimTy(Tree.PrimTy primTy, @Nullable Void input) {
+  public Void visitPrimTy(Tree.PrimTy primTy, Void input) {
     append(primTy.tykind().toString());
     return null;
   }
 
   @Override
-  public @Nullable Void visitVoidTy(Tree.VoidTy voidTy, @Nullable Void input) {
+  public Void visitVoidTy(Tree.VoidTy primTy, Void input) {
     append("void");
     return null;
   }
 
   @Override
-  public @Nullable Void visitClassTy(Tree.ClassTy classTy, @Nullable Void input) {
+  public Void visitClassTy(Tree.ClassTy classTy, Void input) {
     if (classTy.base().isPresent()) {
       classTy.base().get().accept(this, null);
       append('.');
@@ -153,19 +148,13 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitLiteral(Tree.Literal literal, @Nullable Void input) {
+  public Void visitLiteral(Tree.Literal literal, Void input) {
     append(literal.value().toString());
     return null;
   }
 
   @Override
-  public @Nullable Void visitParen(Tree.Paren paren, @Nullable Void input) {
-    paren.expr().accept(this, null);
-    return null;
-  }
-
-  @Override
-  public @Nullable Void visitTypeCast(Tree.TypeCast typeCast, @Nullable Void input) {
+  public Void visitTypeCast(Tree.TypeCast typeCast, Void input) {
     append('(');
     typeCast.ty().accept(this, null);
     append(") ");
@@ -174,7 +163,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitUnary(Tree.Unary unary, @Nullable Void input) {
+  public Void visitUnary(Tree.Unary unary, Void input) {
     switch (unary.op()) {
       case POST_INCR:
       case POST_DECR:
@@ -197,42 +186,37 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitBinary(Tree.Binary binary, @Nullable Void input) {
+  public Void visitBinary(Tree.Binary binary, Void input) {
     append('(');
-    boolean first = true;
-    for (Tree child : binary.children()) {
-      if (!first) {
-        append(" ").append(binary.op().toString()).append(" ");
-      }
-      child.accept(this, null);
-      first = false;
-    }
+    binary.lhs().accept(this, null);
+    append(" " + binary.op() + " ");
+    binary.rhs().accept(this, null);
     append(')');
     return null;
   }
 
   @Override
-  public @Nullable Void visitConstVarName(Tree.ConstVarName constVarName, @Nullable Void input) {
+  public Void visitConstVarName(Tree.ConstVarName constVarName, Void input) {
     append(Joiner.on('.').join(constVarName.name()));
     return null;
   }
 
   @Override
-  public @Nullable Void visitClassLiteral(ClassLiteral classLiteral, @Nullable Void input) {
-    classLiteral.type().accept(this, input);
+  public Void visitClassLiteral(ClassLiteral classLiteral, Void input) {
+    classLiteral.accept(this, input);
     append(".class");
     return null;
   }
 
   @Override
-  public @Nullable Void visitAssign(Tree.Assign assign, @Nullable Void input) {
+  public Void visitAssign(Tree.Assign assign, Void input) {
     append(assign.name().value()).append(" = ");
     assign.expr().accept(this, null);
     return null;
   }
 
   @Override
-  public @Nullable Void visitConditional(Tree.Conditional conditional, @Nullable Void input) {
+  public Void visitConditional(Tree.Conditional conditional, Void input) {
     append("(");
     conditional.cond().accept(this, null);
     append(" ? ");
@@ -244,7 +228,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitArrayInit(Tree.ArrayInit arrayInit, @Nullable Void input) {
+  public Void visitArrayInit(Tree.ArrayInit arrayInit, Void input) {
     append('{');
     boolean first = true;
     for (Tree.Expression e : arrayInit.exprs()) {
@@ -259,7 +243,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitCompUnit(Tree.CompUnit compUnit, @Nullable Void input) {
+  public Void visitCompUnit(Tree.CompUnit compUnit, Void input) {
     if (compUnit.pkg().isPresent()) {
       compUnit.pkg().get().accept(this, null);
       printLine();
@@ -279,7 +263,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitImportDecl(Tree.ImportDecl importDecl, @Nullable Void input) {
+  public Void visitImportDecl(Tree.ImportDecl importDecl, Void input) {
     append("import ");
     if (importDecl.stat()) {
       append("static ");
@@ -293,7 +277,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitVarDecl(Tree.VarDecl varDecl, @Nullable Void input) {
+  public Void visitVarDecl(Tree.VarDecl varDecl, Void input) {
     printVarDecl(varDecl);
     append(';');
     return null;
@@ -318,7 +302,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitMethDecl(Tree.MethDecl methDecl, @Nullable Void input) {
+  public Void visitMethDecl(Tree.MethDecl methDecl, Void input) {
     for (Tree.Anno anno : methDecl.annos()) {
       anno.accept(this, null);
       printLine();
@@ -377,7 +361,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitAnno(Tree.Anno anno, @Nullable Void input) {
+  public Void visitAnno(Tree.Anno anno, Void input) {
     append('@');
     append(Joiner.on('.').join(anno.name()));
     if (!anno.args().isEmpty()) {
@@ -396,7 +380,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitTyDecl(Tree.TyDecl tyDecl, @Nullable Void input) {
+  public Void visitTyDecl(Tree.TyDecl tyDecl, Void input) {
     for (Tree.Anno anno : tyDecl.annos()) {
       anno.accept(this, null);
       printLine();
@@ -415,9 +399,6 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
       case ANNOTATION:
         append("@interface");
         break;
-      case RECORD:
-        append("record");
-        break;
     }
     append(' ').append(tyDecl.name().value());
     if (!tyDecl.typarams().isEmpty()) {
@@ -432,18 +413,6 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
       }
       append('>');
     }
-    if (tyDecl.tykind().equals(TurbineTyKind.RECORD)) {
-      append("(");
-      boolean first = true;
-      for (Tree.VarDecl c : tyDecl.components()) {
-        if (!first) {
-          append(", ");
-        }
-        printVarDecl(c);
-        first = false;
-      }
-      append(")");
-    }
     if (tyDecl.xtnds().isPresent()) {
       append(" extends ");
       tyDecl.xtnds().get().accept(this, null);
@@ -452,17 +421,6 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
       append(" implements ");
       boolean first = true;
       for (Tree.ClassTy t : tyDecl.impls()) {
-        if (!first) {
-          append(", ");
-        }
-        t.accept(this, null);
-        first = false;
-      }
-    }
-    if (!tyDecl.permits().isEmpty()) {
-      append(" permits ");
-      boolean first = true;
-      for (Tree.ClassTy t : tyDecl.permits()) {
         if (!first) {
           append(", ");
         }
@@ -533,8 +491,6 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
         case TRANSIENT:
         case DEFAULT:
         case TRANSITIVE:
-        case SEALED:
-        case NON_SEALED:
           append(mod.toString()).append(' ');
           break;
         case ACC_SUPER:
@@ -544,14 +500,13 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
         case ACC_ANNOTATION:
         case ACC_SYNTHETIC:
         case ACC_BRIDGE:
-        case COMPACT_CTOR:
           break;
       }
     }
   }
 
   @Override
-  public @Nullable Void visitTyParam(Tree.TyParam tyParam, @Nullable Void input) {
+  public Void visitTyParam(Tree.TyParam tyParam, Void input) {
     printAnnos(tyParam.annos());
     append(tyParam.name().value());
     if (!tyParam.bounds().isEmpty()) {
@@ -569,7 +524,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitPkgDecl(Tree.PkgDecl pkgDecl, @Nullable Void input) {
+  public Void visitPkgDecl(Tree.PkgDecl pkgDecl, Void input) {
     for (Tree.Anno anno : pkgDecl.annos()) {
       anno.accept(this, null);
       printLine();
@@ -579,7 +534,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitModDecl(ModDecl modDecl, @Nullable Void input) {
+  public Void visitModDecl(ModDecl modDecl, Void input) {
     for (Tree.Anno anno : modDecl.annos()) {
       anno.accept(this, null);
       printLine();
@@ -599,7 +554,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitModRequires(ModRequires modRequires, @Nullable Void input) {
+  public Void visitModRequires(ModRequires modRequires, Void input) {
     append("requires ");
     printModifiers(modRequires.mods());
     append(modRequires.moduleName());
@@ -609,7 +564,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitModExports(ModExports modExports, @Nullable Void input) {
+  public Void visitModExports(ModExports modExports, Void input) {
     append("exports ");
     append(modExports.packageName().replace('/', '.'));
     if (!modExports.moduleNames().isEmpty()) {
@@ -631,7 +586,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitModOpens(ModOpens modOpens, @Nullable Void input) {
+  public Void visitModOpens(ModOpens modOpens, Void input) {
     append("opens ");
     append(modOpens.packageName().replace('/', '.'));
     if (!modOpens.moduleNames().isEmpty()) {
@@ -653,7 +608,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitModUses(ModUses modUses, @Nullable Void input) {
+  public Void visitModUses(ModUses modUses, Void input) {
     append("uses ");
     append(Joiner.on('.').join(modUses.typeName()));
     append(";");
@@ -662,7 +617,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
   }
 
   @Override
-  public @Nullable Void visitModProvides(ModProvides modProvides, @Nullable Void input) {
+  public Void visitModProvides(ModProvides modProvides, Void input) {
     append("provides ");
     append(Joiner.on('.').join(modProvides.typeName()));
     if (!modProvides.implNames().isEmpty()) {

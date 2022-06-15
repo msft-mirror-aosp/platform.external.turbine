@@ -19,7 +19,7 @@ package com.google.turbine.binder.lookup;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.collect.ImmutableList;
-import org.jspecify.nullness.Nullable;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** A {@link TopLevelIndex} that aggregates multiple indices into one. */
 // Note: this implementation doesn't detect if the indices contain incompatible information,
@@ -42,8 +42,9 @@ public class CompoundTopLevelIndex implements TopLevelIndex {
 
   private final Scope scope =
       new Scope() {
+        @Nullable
         @Override
-        public @Nullable LookupResult lookup(LookupKey lookupKey) {
+        public LookupResult lookup(LookupKey lookupKey) {
           // Return the first matching symbol.
           for (TopLevelIndex index : indexes) {
             LookupResult result = index.scope().lookup(lookupKey);
@@ -61,19 +62,14 @@ public class CompoundTopLevelIndex implements TopLevelIndex {
   }
 
   @Override
-  public @Nullable PackageScope lookupPackage(Iterable<String> packagename) {
+  public PackageScope lookupPackage(Iterable<String> packagename) {
     // When returning package scopes, build up a compound scope containing entries from all
     // indices with matching packages.
     PackageScope result = null;
     for (TopLevelIndex index : indexes) {
       PackageScope packageScope = index.lookupPackage(packagename);
-      if (packageScope == null) {
-        continue;
-      }
-      if (result == null) {
-        result = packageScope;
-      } else {
-        result = result.append(packageScope);
+      if (packageScope != null) {
+        result = result == null ? packageScope : result.append(packageScope);
       }
     }
     return result;

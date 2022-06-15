@@ -33,14 +33,13 @@ import com.google.turbine.bytecode.ClassWriter;
 import com.google.turbine.model.TurbineFlag;
 import java.util.LinkedHashSet;
 import java.util.Set;
-import org.jspecify.nullness.Nullable;
 
 /**
  * Collects the minimal compile-time API for symbols in the supertype closure of compiled classes.
  * This allows header compilations to be performed against a classpath containing only direct
  * dependencies and no transitive dependencies.
  */
-public final class Transitive {
+public class Transitive {
 
   public static ImmutableMap<String, byte[]> collectDeps(
       ClassPath bootClassPath, BindingResult bound) {
@@ -55,16 +54,15 @@ public final class Transitive {
         // don't export symbols loaded from the bootclasspath
         continue;
       }
-      transitive.put(
-          sym.binaryName(), ClassWriter.writeClass(trimClass(info.classFile(), info.jarFile())));
+      transitive.put(sym.binaryName(), ClassWriter.writeClass(trimClass(info.classFile())));
     }
-    return transitive.buildOrThrow();
+    return transitive.build();
   }
 
   /**
    * Removes information from repackaged classes that will not be needed by upstream compilations.
    */
-  public static ClassFile trimClass(ClassFile cf, @Nullable String jarFile) {
+  public static ClassFile trimClass(ClassFile cf) {
     // drop non-constant fields
     ImmutableList.Builder<FieldInfo> fields = ImmutableList.builder();
     for (FieldInfo f : cf.fields()) {
@@ -82,20 +80,12 @@ public final class Transitive {
         innerClasses.add(i);
       }
     }
-    // Include the original jar file name when repackaging transitive deps. If the same transitive
-    // dep is repackaged more than once, keep the original name.
-    String transitiveJar = cf.transitiveJar();
-    if (transitiveJar == null) {
-      transitiveJar = jarFile;
-    }
     return new ClassFile(
         cf.access(),
-        cf.majorVersion(),
         cf.name(),
         cf.signature(),
         cf.superName(),
         cf.interfaces(),
-        cf.permits(),
         // drop methods, except for annotations where we need to resolve key/value information
         (cf.access() & TurbineFlag.ACC_ANNOTATION) == TurbineFlag.ACC_ANNOTATION
             ? cf.methods()
@@ -106,11 +96,7 @@ public final class Transitive {
         cf.annotations(),
         innerClasses.build(),
         cf.typeAnnotations(),
-        /* module= */ null,
-        /* nestHost= */ null,
-        /* nestMembers= */ ImmutableList.of(),
-        /* record= */ null,
-        /* transitiveJar = */ transitiveJar);
+        /* module= */ null);
   }
 
   private static Set<ClassSymbol> superClosure(BindingResult bound) {
@@ -148,6 +134,4 @@ public final class Transitive {
       addSuperTypes(closure, env, i);
     }
   }
-
-  private Transitive() {}
 }

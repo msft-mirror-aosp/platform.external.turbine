@@ -24,7 +24,6 @@ import com.google.turbine.bytecode.Attribute.ExceptionsAttribute;
 import com.google.turbine.bytecode.Attribute.InnerClasses;
 import com.google.turbine.bytecode.Attribute.MethodParameters;
 import com.google.turbine.bytecode.Attribute.Signature;
-import com.google.turbine.bytecode.Attribute.TurbineTransitiveJar;
 import com.google.turbine.bytecode.Attribute.TypeAnnotations;
 import com.google.turbine.bytecode.ClassFile.AnnotationInfo;
 import com.google.turbine.bytecode.ClassFile.MethodInfo.ParameterInfo;
@@ -42,69 +41,56 @@ import java.util.List;
 public class AttributeWriter {
 
   private final ConstantPool pool;
+  private final ByteArrayDataOutput output;
 
-  public AttributeWriter(ConstantPool pool) {
+  public AttributeWriter(ConstantPool pool, ByteArrayDataOutput output) {
     this.pool = pool;
+    this.output = output;
   }
 
   /** Writes a single attribute. */
-  public void write(ByteArrayDataOutput output, Attribute attribute) {
+  public void write(Attribute attribute) {
     switch (attribute.kind()) {
       case SIGNATURE:
-        writeSignatureAttribute(output, (Signature) attribute);
+        writeSignatureAttribute((Signature) attribute);
         break;
       case EXCEPTIONS:
-        writeExceptionsAttribute(output, (ExceptionsAttribute) attribute);
+        writeExceptionsAttribute((ExceptionsAttribute) attribute);
         break;
       case INNER_CLASSES:
-        writeInnerClasses(output, (InnerClasses) attribute);
+        writeInnerClasses((InnerClasses) attribute);
         break;
       case CONSTANT_VALUE:
-        writeConstantValue(output, (ConstantValue) attribute);
+        writeConstantValue((ConstantValue) attribute);
         break;
       case RUNTIME_VISIBLE_ANNOTATIONS:
       case RUNTIME_INVISIBLE_ANNOTATIONS:
-        writeAnnotation(output, (Attribute.Annotations) attribute);
+        writeAnnotation((Attribute.Annotations) attribute);
         break;
       case ANNOTATION_DEFAULT:
-        writeAnnotationDefault(output, (Attribute.AnnotationDefault) attribute);
+        writeAnnotationDefault((Attribute.AnnotationDefault) attribute);
         break;
       case RUNTIME_VISIBLE_PARAMETER_ANNOTATIONS:
       case RUNTIME_INVISIBLE_PARAMETER_ANNOTATIONS:
-        writeParameterAnnotations(output, (Attribute.ParameterAnnotations) attribute);
+        writeParameterAnnotations((Attribute.ParameterAnnotations) attribute);
         break;
       case DEPRECATED:
-        writeDeprecated(output, attribute);
+        writeDeprecated(attribute);
         break;
       case RUNTIME_INVISIBLE_TYPE_ANNOTATIONS:
       case RUNTIME_VISIBLE_TYPE_ANNOTATIONS:
-        writeTypeAnnotation(output, (Attribute.TypeAnnotations) attribute);
+        writeTypeAnnotation((Attribute.TypeAnnotations) attribute);
         break;
       case METHOD_PARAMETERS:
-        writeMethodParameters(output, (Attribute.MethodParameters) attribute);
+        writeMethodParameters((Attribute.MethodParameters) attribute);
         break;
       case MODULE:
-        writeModule(output, (Attribute.Module) attribute);
-        break;
-      case NEST_HOST:
-        writeNestHost(output, (Attribute.NestHost) attribute);
-        break;
-      case NEST_MEMBERS:
-        writeNestMembers(output, (Attribute.NestMembers) attribute);
-        break;
-      case RECORD:
-        writeRecord(output, (Attribute.Record) attribute);
-        break;
-      case PERMITTED_SUBCLASSES:
-        writePermittedSubclasses(output, (Attribute.PermittedSubclasses) attribute);
-        break;
-      case TURBINE_TRANSITIVE_JAR:
-        writeTurbineTransitiveJar(output, (Attribute.TurbineTransitiveJar) attribute);
+        writeModule((Attribute.Module) attribute);
         break;
     }
   }
 
-  private void writeInnerClasses(ByteArrayDataOutput output, InnerClasses attribute) {
+  private void writeInnerClasses(InnerClasses attribute) {
     output.writeShort(pool.utf8(attribute.kind().signature()));
     output.writeInt(attribute.inners.size() * 8 + 2);
     output.writeShort(attribute.inners.size());
@@ -116,7 +102,7 @@ public class AttributeWriter {
     }
   }
 
-  private void writeExceptionsAttribute(ByteArrayDataOutput output, ExceptionsAttribute attribute) {
+  private void writeExceptionsAttribute(ExceptionsAttribute attribute) {
     output.writeShort(pool.utf8(attribute.kind().signature()));
     output.writeInt(2 + attribute.exceptions.size() * 2);
     output.writeShort(attribute.exceptions.size());
@@ -125,50 +111,44 @@ public class AttributeWriter {
     }
   }
 
-  private void writeSignatureAttribute(ByteArrayDataOutput output, Signature attribute) {
+  private void writeSignatureAttribute(Signature attribute) {
     output.writeShort(pool.utf8(attribute.kind().signature()));
     output.writeInt(2);
     output.writeShort(pool.utf8(attribute.signature));
   }
 
-  public void writeConstantValue(ByteArrayDataOutput output, ConstantValue attribute) {
+  public void writeConstantValue(ConstantValue attribute) {
     output.writeShort(pool.utf8(attribute.kind().signature()));
     output.writeInt(2);
     Const.Value value = attribute.value;
     switch (value.constantTypeKind()) {
       case INT:
-        output.writeShort(pool.integer(((Const.IntValue) value).value()));
-        break;
       case CHAR:
-        output.writeShort(pool.integer(((Const.CharValue) value).value()));
-        break;
       case SHORT:
-        output.writeShort(pool.integer(((Const.ShortValue) value).value()));
-        break;
       case BYTE:
-        output.writeShort(pool.integer(((Const.ByteValue) value).value()));
+        output.writeShort(pool.integer(value.asInteger().value()));
         break;
       case LONG:
-        output.writeShort(pool.longInfo(((Const.LongValue) value).value()));
+        output.writeShort(pool.longInfo(value.asLong().value()));
         break;
       case DOUBLE:
-        output.writeShort(pool.doubleInfo(((Const.DoubleValue) value).value()));
+        output.writeShort(pool.doubleInfo(value.asDouble().value()));
         break;
       case FLOAT:
-        output.writeShort(pool.floatInfo(((Const.FloatValue) value).value()));
+        output.writeShort(pool.floatInfo(value.asFloat().value()));
         break;
       case BOOLEAN:
-        output.writeShort(pool.integer(((Const.BooleanValue) value).value() ? 1 : 0));
+        output.writeShort(pool.integer(value.asBoolean().value() ? 1 : 0));
         break;
       case STRING:
-        output.writeShort(pool.string(((Const.StringValue) value).value()));
+        output.writeShort(pool.string(value.asString().value()));
         break;
       default:
         throw new AssertionError(value.constantTypeKind());
     }
   }
 
-  public void writeAnnotation(ByteArrayDataOutput output, Annotations attribute) {
+  public void writeAnnotation(Annotations attribute) {
     output.writeShort(pool.utf8(attribute.kind().signature()));
     ByteArrayDataOutput tmp = ByteStreams.newDataOutput();
     tmp.writeShort(attribute.annotations().size());
@@ -180,8 +160,7 @@ public class AttributeWriter {
     output.write(data);
   }
 
-  public void writeAnnotationDefault(
-      ByteArrayDataOutput output, Attribute.AnnotationDefault attribute) {
+  public void writeAnnotationDefault(Attribute.AnnotationDefault attribute) {
     output.writeShort(pool.utf8(attribute.kind().signature()));
     ByteArrayDataOutput tmp = ByteStreams.newDataOutput();
     new AnnotationWriter(pool, tmp).writeElementValue(attribute.value());
@@ -190,8 +169,7 @@ public class AttributeWriter {
     output.write(data);
   }
 
-  public void writeParameterAnnotations(
-      ByteArrayDataOutput output, Attribute.ParameterAnnotations attribute) {
+  public void writeParameterAnnotations(Attribute.ParameterAnnotations attribute) {
     output.writeShort(pool.utf8(attribute.kind().signature()));
     ByteArrayDataOutput tmp = ByteStreams.newDataOutput();
     tmp.writeByte(attribute.annotations().size());
@@ -206,12 +184,12 @@ public class AttributeWriter {
     output.write(data);
   }
 
-  private void writeDeprecated(ByteArrayDataOutput output, Attribute attribute) {
+  private void writeDeprecated(Attribute attribute) {
     output.writeShort(pool.utf8(attribute.kind().signature()));
     output.writeInt(0);
   }
 
-  private void writeTypeAnnotation(ByteArrayDataOutput output, TypeAnnotations attribute) {
+  private void writeTypeAnnotation(TypeAnnotations attribute) {
     output.writeShort(pool.utf8(attribute.kind().signature()));
     ByteArrayDataOutput tmp = ByteStreams.newDataOutput();
     tmp.writeShort(attribute.annotations().size());
@@ -223,7 +201,7 @@ public class AttributeWriter {
     output.write(data);
   }
 
-  private void writeMethodParameters(ByteArrayDataOutput output, MethodParameters attribute) {
+  private void writeMethodParameters(MethodParameters attribute) {
     output.writeShort(pool.utf8(attribute.kind().signature()));
     output.writeInt(attribute.parameters().size() * 4 + 1);
     output.writeByte(attribute.parameters().size());
@@ -233,7 +211,7 @@ public class AttributeWriter {
     }
   }
 
-  private void writeModule(ByteArrayDataOutput output, Attribute.Module attribute) {
+  private void writeModule(Attribute.Module attribute) {
     ModuleInfo module = attribute.module();
 
     ByteArrayDataOutput tmp = ByteStreams.newDataOutput();
@@ -287,54 +265,5 @@ public class AttributeWriter {
     output.writeShort(pool.utf8(attribute.kind().signature()));
     output.writeInt(data.length);
     output.write(data);
-  }
-
-  private void writeNestHost(ByteArrayDataOutput output, Attribute.NestHost attribute) {
-    output.writeShort(pool.utf8(attribute.kind().signature()));
-    output.writeInt(2);
-    output.writeShort(pool.classInfo(attribute.hostClass()));
-  }
-
-  private void writeNestMembers(ByteArrayDataOutput output, Attribute.NestMembers attribute) {
-    output.writeShort(pool.utf8(attribute.kind().signature()));
-    output.writeInt(2 + attribute.classes().size() * 2);
-    output.writeShort(attribute.classes().size());
-    for (String classes : attribute.classes()) {
-      output.writeShort(pool.classInfo(classes));
-    }
-  }
-
-  private void writeRecord(ByteArrayDataOutput output, Attribute.Record attribute) {
-    output.writeShort(pool.utf8(attribute.kind().signature()));
-    ByteArrayDataOutput tmp = ByteStreams.newDataOutput();
-    tmp.writeShort(attribute.components().size());
-    for (Attribute.Record.Component c : attribute.components()) {
-      tmp.writeShort(pool.utf8(c.name()));
-      tmp.writeShort(pool.utf8(c.descriptor()));
-      tmp.writeShort(c.attributes().size());
-      for (Attribute a : c.attributes()) {
-        write(tmp, a);
-      }
-    }
-    byte[] data = tmp.toByteArray();
-    output.writeInt(data.length);
-    output.write(data);
-  }
-
-  private void writePermittedSubclasses(
-      ByteArrayDataOutput output, Attribute.PermittedSubclasses attribute) {
-    output.writeShort(pool.utf8(attribute.kind().signature()));
-    output.writeInt(2 + attribute.permits.size() * 2);
-    output.writeShort(attribute.permits.size());
-    for (String permits : attribute.permits) {
-      output.writeShort(pool.classInfo(permits));
-    }
-  }
-
-  private void writeTurbineTransitiveJar(
-      ByteArrayDataOutput output, TurbineTransitiveJar attribute) {
-    output.writeShort(pool.utf8(attribute.kind().signature()));
-    output.writeInt(2);
-    output.writeShort(pool.utf8(attribute.transitiveJar));
   }
 }

@@ -25,19 +25,15 @@ import com.google.turbine.diag.SourceFile;
 import com.google.turbine.model.Const;
 import com.google.turbine.model.TurbineConstantTypeKind;
 import com.google.turbine.model.TurbineTyKind;
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.Optional;
 import java.util.Set;
-import org.jspecify.nullness.Nullable;
 
 /** An AST node. */
 public abstract class Tree {
 
   public abstract Kind kind();
 
-  public abstract <I extends @Nullable Object, O extends @Nullable Object> O accept(
-      Visitor<I, O> visitor, I input);
+  public abstract <I, O> O accept(Visitor<I, O> visitor, I input);
 
   private final int position;
 
@@ -63,7 +59,6 @@ public abstract class Tree {
     VOID_TY,
     CLASS_TY,
     LITERAL,
-    PAREN,
     TYPE_CAST,
     UNARY,
     BINARY,
@@ -106,8 +101,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitIdent(this, input);
     }
 
@@ -160,8 +154,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitWildTy(this, input);
     }
 
@@ -199,8 +192,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitArrTy(this, input);
     }
 
@@ -229,8 +221,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitPrimTy(this, input);
     }
 
@@ -249,8 +240,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitVoidTy(this, input);
     }
 
@@ -283,8 +273,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitClassTy(this, input);
     }
 
@@ -325,8 +314,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitLiteral(this, input);
     }
 
@@ -336,31 +324,6 @@ public abstract class Tree {
 
     public Const value() {
       return value;
-    }
-  }
-
-  /** A JLS 15.8.5 parenthesized expression. */
-  public static class Paren extends Expression {
-    private final Expression expr;
-
-    public Paren(int position, Expression expr) {
-      super(position);
-      this.expr = expr;
-    }
-
-    @Override
-    public Kind kind() {
-      return Kind.PAREN;
-    }
-
-    @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
-      return visitor.visitParen(this, input);
-    }
-
-    public Expression expr() {
-      return expr;
     }
   }
 
@@ -381,8 +344,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitTypeCast(this, input);
     }
 
@@ -412,8 +374,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitUnary(this, input);
     }
 
@@ -445,29 +406,16 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitBinary(this, input);
     }
 
-    public Iterable<Expression> children() {
-      ImmutableList.Builder<Expression> children = ImmutableList.builder();
-      Deque<Expression> stack = new ArrayDeque<>();
-      stack.addFirst(rhs);
-      stack.addFirst(lhs);
-      while (!stack.isEmpty()) {
-        Expression curr = stack.removeFirst();
-        if (curr.kind().equals(Kind.BINARY)) {
-          Binary b = ((Binary) curr);
-          if (b.op().equals(op())) {
-            stack.addFirst(b.rhs);
-            stack.addFirst(b.lhs);
-            continue;
-          }
-        }
-        children.add(curr);
-      }
-      return children.build();
+    public Expression lhs() {
+      return lhs;
+    }
+
+    public Expression rhs() {
+      return rhs;
     }
 
     public TurbineOperatorKind op() {
@@ -490,8 +438,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitConstVarName(this, input);
     }
 
@@ -516,8 +463,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitClassLiteral(this, input);
     }
 
@@ -543,8 +489,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitAssign(this, input);
     }
 
@@ -576,8 +521,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitConditional(this, input);
     }
 
@@ -609,8 +553,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitArrayInit(this, input);
     }
 
@@ -648,8 +591,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitCompUnit(this, input);
     }
 
@@ -693,8 +635,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitImportDecl(this, input);
     }
 
@@ -720,7 +661,7 @@ public abstract class Tree {
     private final Tree ty;
     private final Ident name;
     private final Optional<Expression> init;
-    private final @Nullable String javadoc;
+    private final String javadoc;
 
     public VarDecl(
         int position,
@@ -729,7 +670,7 @@ public abstract class Tree {
         Tree ty,
         Ident name,
         Optional<Expression> init,
-        @Nullable String javadoc) {
+        String javadoc) {
       super(position);
       this.mods = ImmutableSet.copyOf(mods);
       this.annos = annos;
@@ -745,8 +686,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitVarDecl(this, input);
     }
 
@@ -774,7 +714,7 @@ public abstract class Tree {
      * A javadoc comment, excluding the opening and closing delimiters but including all interior
      * characters and whitespace.
      */
-    public @Nullable String javadoc() {
+    public String javadoc() {
       return javadoc;
     }
   }
@@ -820,8 +760,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitMethDecl(this, input);
     }
 
@@ -882,8 +821,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitAnno(this, input);
     }
 
@@ -920,8 +858,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitAnno(value, input);
     }
   }
@@ -934,11 +871,9 @@ public abstract class Tree {
     private final ImmutableList<TyParam> typarams;
     private final Optional<ClassTy> xtnds;
     private final ImmutableList<ClassTy> impls;
-    private final ImmutableList<ClassTy> permits;
     private final ImmutableList<Tree> members;
-    private final ImmutableList<VarDecl> components;
     private final TurbineTyKind tykind;
-    private final @Nullable String javadoc;
+    private final String javadoc;
 
     public TyDecl(
         int position,
@@ -948,11 +883,9 @@ public abstract class Tree {
         ImmutableList<TyParam> typarams,
         Optional<ClassTy> xtnds,
         ImmutableList<ClassTy> impls,
-        ImmutableList<ClassTy> permits,
         ImmutableList<Tree> members,
-        ImmutableList<VarDecl> components,
         TurbineTyKind tykind,
-        @Nullable String javadoc) {
+        String javadoc) {
       super(position);
       this.mods = ImmutableSet.copyOf(mods);
       this.annos = annos;
@@ -960,9 +893,7 @@ public abstract class Tree {
       this.typarams = typarams;
       this.xtnds = xtnds;
       this.impls = impls;
-      this.permits = permits;
       this.members = members;
-      this.components = components;
       this.tykind = tykind;
       this.javadoc = javadoc;
     }
@@ -973,8 +904,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitTyDecl(this, input);
     }
 
@@ -1002,16 +932,8 @@ public abstract class Tree {
       return impls;
     }
 
-    public ImmutableList<ClassTy> permits() {
-      return permits;
-    }
-
     public ImmutableList<Tree> members() {
       return members;
-    }
-
-    public ImmutableList<VarDecl> components() {
-      return components;
     }
 
     public TurbineTyKind tykind() {
@@ -1021,7 +943,7 @@ public abstract class Tree {
      * A javadoc comment, excluding the opening and closing delimiters but including all interior
      * characters and whitespace.
      */
-    public @Nullable String javadoc() {
+    public String javadoc() {
       return javadoc;
     }
   }
@@ -1046,8 +968,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitTyParam(this, input);
     }
 
@@ -1081,8 +1002,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitPkgDecl(this, input);
     }
 
@@ -1138,8 +1058,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitModDecl(this, input);
     }
   }
@@ -1175,8 +1094,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitModRequires(this, input);
     }
 
@@ -1212,8 +1130,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitModExports(this, input);
     }
 
@@ -1263,8 +1180,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitModOpens(this, input);
     }
 
@@ -1294,8 +1210,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitModUses(this, input);
     }
 
@@ -1334,8 +1249,7 @@ public abstract class Tree {
     }
 
     @Override
-    public <I extends @Nullable Object, O extends @Nullable Object> O accept(
-        Visitor<I, O> visitor, I input) {
+    public <I, O> O accept(Visitor<I, O> visitor, I input) {
       return visitor.visitModProvides(this, input);
     }
 
@@ -1346,7 +1260,7 @@ public abstract class Tree {
   }
 
   /** A visitor for {@link Tree}s. */
-  public interface Visitor<I extends @Nullable Object, O extends @Nullable Object> {
+  public interface Visitor<I, O> {
     O visitIdent(Ident ident, I input);
 
     O visitWildTy(WildTy visitor, I input);
@@ -1360,8 +1274,6 @@ public abstract class Tree {
     O visitClassTy(ClassTy visitor, I input);
 
     O visitLiteral(Literal literal, I input);
-
-    O visitParen(Paren unary, I input);
 
     O visitTypeCast(TypeCast typeCast, I input);
 

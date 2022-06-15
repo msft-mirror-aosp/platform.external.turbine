@@ -16,9 +16,6 @@
 
 package com.google.turbine.binder;
 
-import static com.google.common.collect.Iterables.getLast;
-import static java.util.Objects.requireNonNull;
-
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -28,7 +25,6 @@ import com.google.turbine.binder.bound.SourceTypeBoundClass;
 import com.google.turbine.binder.bound.TypeBoundClass.FieldInfo;
 import com.google.turbine.binder.bound.TypeBoundClass.MethodInfo;
 import com.google.turbine.binder.bound.TypeBoundClass.ParamInfo;
-import com.google.turbine.binder.bound.TypeBoundClass.RecordComponentInfo;
 import com.google.turbine.binder.bound.TypeBoundClass.TyVarInfo;
 import com.google.turbine.binder.env.Env;
 import com.google.turbine.binder.lookup.CompoundScope;
@@ -39,7 +35,6 @@ import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.binder.sym.FieldSymbol;
 import com.google.turbine.binder.sym.MethodSymbol;
 import com.google.turbine.binder.sym.ParamSymbol;
-import com.google.turbine.binder.sym.RecordComponentSymbol;
 import com.google.turbine.binder.sym.Symbol;
 import com.google.turbine.binder.sym.TyVarSymbol;
 import com.google.turbine.diag.TurbineError.ErrorKind;
@@ -59,14 +54,12 @@ import com.google.turbine.tree.TurbineModifier;
 import com.google.turbine.type.AnnoInfo;
 import com.google.turbine.type.Type;
 import com.google.turbine.type.Type.IntersectionTy;
-import com.google.turbine.types.Deannotate;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.jspecify.nullness.Nullable;
 
 /** Type binding. */
 public class TypeBinder {
@@ -83,7 +76,7 @@ public class TypeBinder {
     }
 
     @Override
-    public @Nullable LookupResult lookup(LookupKey lookup) {
+    public LookupResult lookup(LookupKey lookup) {
       if (name.equals(lookup.first().value())) {
         return new LookupResult(sym, lookup);
       }
@@ -100,7 +93,7 @@ public class TypeBinder {
     }
 
     @Override
-    public @Nullable LookupResult lookup(LookupKey lookupKey) {
+    public LookupResult lookup(LookupKey lookupKey) {
       Symbol sym = tps.get(lookupKey.first().value());
       return sym != null ? new LookupResult(sym, lookupKey) : null;
     }
@@ -120,14 +113,14 @@ public class TypeBinder {
     }
 
     @Override
-    public @Nullable LookupResult lookup(LookupKey lookup) {
+    public LookupResult lookup(LookupKey lookup) {
       ClassSymbol curr = sym;
       while (curr != null) {
+        HeaderBoundClass info = env.get(curr);
         Symbol result = Resolve.resolve(env, sym, curr, lookup.first());
         if (result != null) {
           return new LookupResult(result, lookup);
         }
-        HeaderBoundClass info = env.getNonNull(curr);
         result = info.typeParameters().get(lookup.first().value());
         if (result != null) {
           return new LookupResult(result, lookup);
@@ -172,10 +165,8 @@ public class TypeBinder {
     CompoundScope enclosingScope =
         base.scope()
             .toScope(Resolve.resolveFunction(env, owner))
-            .append(new SingletonScope(base.decl().name().value(), owner));
-    if (base.owner() != null) {
-      enclosingScope = enclosingScope.append(new ClassMemberScope(base.owner(), env));
-    }
+            .append(new SingletonScope(base.decl().name().value(), owner))
+            .append(new ClassMemberScope(base.owner(), env));
 
     ImmutableList<AnnoInfo> annotations = bindAnnotations(enclosingScope, base.decl().annos());
 
@@ -218,9 +209,6 @@ public class TypeBinder {
         }
         superClassType = Type.ClassTy.OBJECT;
         break;
-      case RECORD:
-        superClassType = Type.ClassTy.asNonParametricClassTy(ClassSymbol.RECORD);
-        break;
       default:
         throw new AssertionError(base.decl().tykind());
     }
@@ -229,43 +217,26 @@ public class TypeBinder {
       interfaceTypes.add(bindClassTy(bindingScope, i));
     }
 
-    ImmutableList.Builder<ClassSymbol> permits = ImmutableList.builder();
-    for (Tree.ClassTy i : base.decl().permits()) {
-      Type type = bindClassTy(bindingScope, i);
-      if (!type.tyKind().equals(Type.TyKind.CLASS_TY)) {
-        throw new AssertionError(type.tyKind());
-      }
-      permits.add(((Type.ClassTy) type).sym());
-    }
-
     CompoundScope scope =
         base.scope()
             .toScope(Resolve.resolveFunction(env, owner))
             .append(new SingletonScope(base.decl().name().value(), owner))
             .append(new ClassMemberScope(owner, env));
 
-    SyntheticMethods syntheticMethods = new SyntheticMethods();
-
-    ImmutableList<RecordComponentInfo> components = bindComponents(scope, base.decl().components());
-
-    ImmutableList.Builder<MethodInfo> methods =
+    List<MethodInfo> methods =
         ImmutableList.<MethodInfo>builder()
-            .addAll(syntheticMethods(syntheticMethods, components))
-            .addAll(bindMethods(scope, base.decl().members(), components));
-    if (base.kind().equals(TurbineTyKind.RECORD)) {
-      methods.addAll(syntheticRecordMethods(syntheticMethods, components));
-    }
+            .addAll(syntheticMethods())
+            .addAll(bindMethods(scope, base.decl().members()))
+            .build();
 
     ImmutableList<FieldInfo> fields = bindFields(scope, base.decl().members());
 
     return new SourceTypeBoundClass(
         interfaceTypes.build(),
-        permits.build(),
         superClassType,
         typeParameterTypes,
         base.access(),
-        components,
-        methods.build(),
+        ImmutableList.copyOf(methods),
         fields,
         base.owner(),
         base.kind(),
@@ -280,79 +251,23 @@ public class TypeBinder {
         base.decl());
   }
 
-  /**
-   * A generated for synthetic {@link MethodSymbol}s.
-   *
-   * <p>Each {@link MethodSymbol} contains an index into its enclosing class, to enable comparing
-   * the symbols for equality. For synthetic methods we use an arbitrary unique negative index.
-   */
-  private static class SyntheticMethods {
-
-    private int idx = -1;
-
-    MethodSymbol create(ClassSymbol owner, String name) {
-      return new MethodSymbol(idx--, owner, name);
-    }
-  }
-
-  private ImmutableList<RecordComponentInfo> bindComponents(
-      CompoundScope scope, ImmutableList<Tree.VarDecl> components) {
-    ImmutableList.Builder<RecordComponentInfo> result = ImmutableList.builder();
-    for (Tree.VarDecl p : components) {
-      int access = 0;
-      for (TurbineModifier m : p.mods()) {
-        access |= m.flag();
-      }
-      RecordComponentInfo param =
-          new RecordComponentInfo(
-              new RecordComponentSymbol(owner, p.name().value()),
-              bindTy(scope, p.ty()),
-              bindAnnotations(scope, p.annos()),
-              access);
-      result.add(param);
-    }
-    return result.build();
-  }
-
   /** Collect synthetic and implicit methods, including default constructors and enum methods. */
-  ImmutableList<MethodInfo> syntheticMethods(
-      SyntheticMethods syntheticMethods, ImmutableList<RecordComponentInfo> components) {
+  ImmutableList<MethodInfo> syntheticMethods() {
     switch (base.kind()) {
       case CLASS:
-        return maybeDefaultConstructor(syntheticMethods);
-      case RECORD:
-        return maybeDefaultRecordConstructor(syntheticMethods, components);
+        return maybeDefaultConstructor();
       case ENUM:
-        return syntheticEnumMethods(syntheticMethods);
+        return syntheticEnumMethods();
       default:
         return ImmutableList.of();
     }
   }
 
-  private ImmutableList<MethodInfo> maybeDefaultRecordConstructor(
-      SyntheticMethods syntheticMethods, ImmutableList<RecordComponentInfo> components) {
+  private ImmutableList<MethodInfo> maybeDefaultConstructor() {
     if (hasConstructor()) {
       return ImmutableList.of();
     }
-    MethodSymbol symbol = syntheticMethods.create(owner, "<init>");
-    ImmutableList.Builder<ParamInfo> params = ImmutableList.builder();
-    for (RecordComponentInfo component : components) {
-      params.add(
-          new ParamInfo(
-              new ParamSymbol(symbol, component.name()),
-              component.type(),
-              component.annotations(),
-              component.access()));
-    }
-    return ImmutableList.of(
-        syntheticConstructor(symbol, params.build(), TurbineVisibility.fromAccess(base.access())));
-  }
-
-  private ImmutableList<MethodInfo> maybeDefaultConstructor(SyntheticMethods syntheticMethods) {
-    if (hasConstructor()) {
-      return ImmutableList.of();
-    }
-    MethodSymbol symbol = syntheticMethods.create(owner, "<init>");
+    MethodSymbol symbol = new MethodSymbol(-1, owner, "<init>");
     ImmutableList<ParamInfo> formals;
     if (hasEnclosingInstance(base)) {
       formals = ImmutableList.of(enclosingInstanceParameter(symbol));
@@ -367,10 +282,6 @@ public class TypeBinder {
       MethodSymbol symbol, ImmutableList<ParamInfo> formals, TurbineVisibility visibility) {
     int access = visibility.flag();
     access |= (base.access() & TurbineFlag.ACC_STRICT);
-    if (!formals.isEmpty()
-        && (getLast(formals).access() & TurbineFlag.ACC_VARARGS) == TurbineFlag.ACC_VARARGS) {
-      access |= TurbineFlag.ACC_VARARGS;
-    }
     return new MethodInfo(
         symbol,
         ImmutableMap.of(),
@@ -393,7 +304,7 @@ public class TypeBinder {
     }
     int enclosingInstances = 0;
     for (ClassSymbol sym = base.owner(); sym != null; ) {
-      HeaderBoundClass info = env.getNonNull(sym);
+      HeaderBoundClass info = env.get(sym);
       if (((info.access() & TurbineFlag.ACC_STATIC) == TurbineFlag.ACC_STATIC)
           || info.owner() == null) {
         break;
@@ -424,15 +335,15 @@ public class TypeBinder {
             TurbineFlag.ACC_SYNTHETIC));
   }
 
-  private ImmutableList<MethodInfo> syntheticEnumMethods(SyntheticMethods syntheticMethods) {
+  private ImmutableList<MethodInfo> syntheticEnumMethods() {
     ImmutableList.Builder<MethodInfo> methods = ImmutableList.builder();
     int access = 0;
     access |= (base.access() & TurbineFlag.ACC_STRICT);
     if (!hasConstructor()) {
-      MethodSymbol symbol = syntheticMethods.create(owner, "<init>");
+      MethodSymbol symbol = new MethodSymbol(-1, owner, "<init>");
       methods.add(syntheticConstructor(symbol, enumCtorParams(symbol), TurbineVisibility.PRIVATE));
     }
-    MethodSymbol valuesMethod = syntheticMethods.create(owner, "values");
+    MethodSymbol valuesMethod = new MethodSymbol(-2, owner, "values");
     methods.add(
         new MethodInfo(
             valuesMethod,
@@ -445,7 +356,7 @@ public class TypeBinder {
             null,
             ImmutableList.of(),
             null));
-    MethodSymbol valueOfMethod = syntheticMethods.create(owner, "valueOf");
+    MethodSymbol valueOfMethod = new MethodSymbol(-3, owner, "valueOf");
     methods.add(
         new MethodInfo(
             valueOfMethod,
@@ -466,71 +377,6 @@ public class TypeBinder {
     return methods.build();
   }
 
-  private ImmutableList<MethodInfo> syntheticRecordMethods(
-      SyntheticMethods syntheticMethods, ImmutableList<RecordComponentInfo> components) {
-    ImmutableList.Builder<MethodInfo> methods = ImmutableList.builder();
-    MethodSymbol toStringMethod = syntheticMethods.create(owner, "toString");
-    methods.add(
-        new MethodInfo(
-            toStringMethod,
-            ImmutableMap.of(),
-            Type.ClassTy.STRING,
-            ImmutableList.of(),
-            ImmutableList.of(),
-            TurbineFlag.ACC_PUBLIC | TurbineFlag.ACC_FINAL,
-            null,
-            null,
-            ImmutableList.of(),
-            null));
-    MethodSymbol hashCodeMethod = syntheticMethods.create(owner, "hashCode");
-    methods.add(
-        new MethodInfo(
-            hashCodeMethod,
-            ImmutableMap.of(),
-            Type.PrimTy.create(TurbineConstantTypeKind.INT, ImmutableList.of()),
-            ImmutableList.of(),
-            ImmutableList.of(),
-            TurbineFlag.ACC_PUBLIC | TurbineFlag.ACC_FINAL,
-            null,
-            null,
-            ImmutableList.of(),
-            null));
-    MethodSymbol equalsMethod = syntheticMethods.create(owner, "equals");
-    methods.add(
-        new MethodInfo(
-            equalsMethod,
-            ImmutableMap.of(),
-            Type.PrimTy.create(TurbineConstantTypeKind.BOOLEAN, ImmutableList.of()),
-            ImmutableList.of(
-                new ParamInfo(
-                    new ParamSymbol(equalsMethod, "other"),
-                    Type.ClassTy.OBJECT,
-                    ImmutableList.of(),
-                    TurbineFlag.ACC_MANDATED)),
-            ImmutableList.of(),
-            TurbineFlag.ACC_PUBLIC | TurbineFlag.ACC_FINAL,
-            null,
-            null,
-            ImmutableList.of(),
-            null));
-    for (RecordComponentInfo c : components) {
-      MethodSymbol componentMethod = syntheticMethods.create(owner, c.name());
-      methods.add(
-          new MethodInfo(
-              componentMethod,
-              ImmutableMap.of(),
-              c.type(),
-              ImmutableList.of(),
-              ImmutableList.of(),
-              TurbineFlag.ACC_PUBLIC,
-              null,
-              null,
-              c.annotations(),
-              null));
-    }
-    return methods.build();
-  }
-
   private boolean hasConstructor() {
     for (Tree m : base.decl().members()) {
       if (m.kind() != Kind.METH_DECL) {
@@ -548,8 +394,7 @@ public class TypeBinder {
       ImmutableList<Tree.TyParam> trees, CompoundScope scope, Map<String, TyVarSymbol> symbols) {
     ImmutableMap.Builder<TyVarSymbol, TyVarInfo> result = ImmutableMap.builder();
     for (Tree.TyParam tree : trees) {
-      // `symbols` is constructed to guarantee the requireNonNull call is safe.
-      TyVarSymbol sym = requireNonNull(symbols.get(tree.name().value()));
+      TyVarSymbol sym = symbols.get(tree.name().value());
       ImmutableList.Builder<Type> bounds = ImmutableList.builder();
       for (Tree bound : tree.bounds()) {
         bounds.add(bindTy(scope, bound));
@@ -560,25 +405,21 @@ public class TypeBinder {
           new TyVarInfo(
               IntersectionTy.create(bounds.build()), /* lowerBound= */ null, annotations));
     }
-    return result.buildOrThrow();
+    return result.build();
   }
 
-  private List<MethodInfo> bindMethods(
-      CompoundScope scope,
-      ImmutableList<Tree> members,
-      ImmutableList<RecordComponentInfo> components) {
+  private List<MethodInfo> bindMethods(CompoundScope scope, ImmutableList<Tree> members) {
     List<MethodInfo> methods = new ArrayList<>();
     int idx = 0;
     for (Tree member : members) {
       if (member.kind() == Tree.Kind.METH_DECL) {
-        methods.add(bindMethod(idx++, scope, (MethDecl) member, components));
+        methods.add(bindMethod(idx++, scope, (Tree.MethDecl) member));
       }
     }
     return methods;
   }
 
-  private MethodInfo bindMethod(
-      int idx, CompoundScope scope, MethDecl t, ImmutableList<RecordComponentInfo> components) {
+  private MethodInfo bindMethod(int idx, CompoundScope scope, Tree.MethDecl t) {
 
     MethodSymbol sym = new MethodSymbol(idx, owner, t.name().value());
 
@@ -588,7 +429,7 @@ public class TypeBinder {
       for (Tree.TyParam pt : t.typarams()) {
         builder.put(pt.name().value(), new TyVarSymbol(sym, pt.name().value()));
       }
-      typeParameters = builder.buildOrThrow();
+      typeParameters = builder.build();
     }
 
     // type parameters can refer to each other in f-bounds, so update the scope first
@@ -608,26 +449,8 @@ public class TypeBinder {
     if (name.equals("<init>")) {
       if (hasEnclosingInstance(base)) {
         parameters.add(enclosingInstanceParameter(sym));
-      } else {
-        switch (base.kind()) {
-          case ENUM:
-            parameters.addAll(enumCtorParams(sym));
-            break;
-          case RECORD:
-            if (t.mods().contains(TurbineModifier.COMPACT_CTOR)) {
-              for (RecordComponentInfo component : components) {
-                parameters.add(
-                    new ParamInfo(
-                        new ParamSymbol(sym, component.name()),
-                        component.type(),
-                        component.annotations(),
-                        component.access()));
-              }
-            }
-            break;
-          default:
-            break;
-        }
+      } else if (base.kind() == TurbineTyKind.ENUM && name.equals("<init>")) {
+        parameters.addAll(enumCtorParams(sym));
       }
     }
     ParamInfo receiver = null;
@@ -669,9 +492,6 @@ public class TypeBinder {
                 & (TurbineFlag.ACC_DEFAULT | TurbineFlag.ACC_STATIC | TurbineFlag.ACC_SYNTHETIC))
             == 0) {
           access |= TurbineFlag.ACC_ABSTRACT;
-        }
-        if ((access & TurbineFlag.ACC_FINAL) == TurbineFlag.ACC_FINAL) {
-          log.error(t.position(), ErrorKind.UNEXPECTED_MODIFIER, TurbineModifier.FINAL);
         }
         break;
       case ENUM:
@@ -755,8 +575,8 @@ public class TypeBinder {
     return result.build();
   }
 
-  private @Nullable ClassSymbol resolveAnnoSymbol(
-      Anno tree, ImmutableList<Ident> name, @Nullable LookupResult lookupResult) {
+  private ClassSymbol resolveAnnoSymbol(
+      Anno tree, ImmutableList<Ident> name, LookupResult lookupResult) {
     if (lookupResult == null) {
       log.error(tree.position(), ErrorKind.CANNOT_RESOLVE, Joiner.on('.').join(name));
       return null;
@@ -768,13 +588,13 @@ public class TypeBinder {
         return null;
       }
     }
-    if (env.getNonNull(sym).kind() != TurbineTyKind.ANNOTATION) {
+    if (env.get(sym).kind() != TurbineTyKind.ANNOTATION) {
       log.error(tree.position(), ErrorKind.NOT_AN_ANNOTATION, sym);
     }
     return sym;
   }
 
-  private @Nullable ClassSymbol resolveNext(ClassSymbol sym, Ident bit) {
+  private ClassSymbol resolveNext(ClassSymbol sym, Ident bit) {
     ClassSymbol next = Resolve.resolve(env, owner, sym, bit);
     if (next == null) {
       log.error(
@@ -798,14 +618,7 @@ public class TypeBinder {
       case WILD_TY:
         return bindWildTy(scope, (Tree.WildTy) ty);
       default:
-        Type result = bindTy(scope, ty);
-        if (result.tyKind().equals(Type.TyKind.PRIM_TY)) {
-          // Omit type annotations when printing the type in the diagnostic, since they're
-          // irrelevant and could be invalid if there were deferred errors.
-          // TODO(cushon): consider ensuring this is done for all diagnostics that mention types
-          log.error(ty.position(), ErrorKind.UNEXPECTED_TYPE, Deannotate.deannotate(result));
-        }
-        return result;
+        return bindTy(scope, ty);
     }
   }
 
@@ -878,11 +691,10 @@ public class TypeBinder {
             sym, bindTyArgs(scope, flat.get(idx++).tyargs()), annotations));
     for (; idx < flat.size(); idx++) {
       Tree.ClassTy curr = flat.get(idx);
-      ClassSymbol next = resolveNext(sym, curr.name());
-      if (next == null) {
+      sym = resolveNext(sym, curr.name());
+      if (sym == null) {
         return Type.ErrorTy.create(bits);
       }
-      sym = next;
 
       annotations = bindAnnotations(scope, curr.annos());
       classes.add(

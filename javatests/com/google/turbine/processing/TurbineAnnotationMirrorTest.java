@@ -20,7 +20,6 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.auto.common.AnnotationValues;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -135,17 +134,17 @@ public class TurbineAnnotationMirrorTest {
 
           @Override
           public Object visitType(TypeMirror t, Void unused) {
-            return AnnotationValues.toString(value);
+            return value.toString();
           }
 
           @Override
           public Object visitEnumConstant(VariableElement c, Void unused) {
-            return AnnotationValues.toString(value);
+            return value.toString();
           }
 
           @Override
           public Object visitAnnotation(AnnotationMirror a, Void unused) {
-            return AnnotationValues.toString(value);
+            return value.toString();
           }
 
           @Override

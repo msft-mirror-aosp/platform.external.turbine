@@ -17,7 +17,6 @@
 package com.google.turbine.processing;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static java.util.Objects.requireNonNull;
 
 import com.google.turbine.binder.bound.EnumConstantValue;
 import com.google.turbine.binder.bound.TurbineAnnotationValue;
@@ -132,15 +131,14 @@ class TurbineAnnotationProxy implements InvocationHandler {
 
   private static Object constArrayValue(
       Class<?> returnType, ModelFactory factory, ClassLoader loader, ArrayInitValue value) {
-    Class<?> componentType = requireNonNull(returnType.getComponentType());
-    if (componentType.equals(Class.class)) {
+    if (returnType.getComponentType().equals(Class.class)) {
       List<TypeMirror> result = new ArrayList<>();
       for (Const element : value.elements()) {
         result.add(factory.asTypeMirror(((TurbineClassValue) element).type()));
       }
       throw new MirroredTypesException(result);
     }
-    Object result = Array.newInstance(componentType, value.elements().size());
+    Object result = Array.newInstance(returnType.getComponentType(), value.elements().size());
     int idx = 0;
     for (Const element : value.elements()) {
       Object v = constValue(returnType, factory, loader, element);

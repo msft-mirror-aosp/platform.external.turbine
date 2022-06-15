@@ -27,10 +27,14 @@ import com.google.turbine.model.Const.Value;
 import java.util.List;
 
 /** Class file writing. */
-public final class ClassWriter {
+public class ClassWriter {
 
   private static final int MAGIC = 0xcafebabe;
   private static final int MINOR_VERSION = 0;
+  // use the lowest classfile version possible given the class file features
+  // TODO(cushon): is there a reason to support --release?
+  private static final int MAJOR_VERSION = 52;
+  private static final int MODULE_MAJOR_VERSION = 53;
 
   /** Writes a {@link ClassFile} to bytecode. */
   public static byte[] writeClass(ClassFile classfile) {
@@ -75,7 +79,7 @@ public final class ClassWriter {
       ConstantPool pool, ByteArrayDataOutput body, List<Attribute> attributes) {
     body.writeShort(attributes.size());
     for (Attribute attribute : attributes) {
-      new AttributeWriter(pool).write(body, attribute);
+      new AttributeWriter(pool, body).write(attribute);
     }
   }
 
@@ -115,11 +119,9 @@ public final class ClassWriter {
     ByteArrayDataOutput result = ByteStreams.newDataOutput();
     result.writeInt(MAGIC);
     result.writeShort(MINOR_VERSION);
-    result.writeShort(classfile.majorVersion());
+    result.writeShort(classfile.module() != null ? MODULE_MAJOR_VERSION : MAJOR_VERSION);
     writeConstantPool(pool, result);
     result.write(body.toByteArray());
     return result.toByteArray();
   }
-
-  private ClassWriter() {}
 }

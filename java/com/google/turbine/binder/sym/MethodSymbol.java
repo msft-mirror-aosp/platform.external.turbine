@@ -18,7 +18,6 @@ package com.google.turbine.binder.sym;
 
 import com.google.errorprone.annotations.Immutable;
 import java.util.Objects;
-import org.jspecify.nullness.Nullable;
 
 /** A method symbol. */
 @Immutable
@@ -59,7 +58,7 @@ public class MethodSymbol implements Symbol {
   }
 
   @Override
-  public boolean equals(@Nullable Object obj) {
+  public boolean equals(Object obj) {
     if (!(obj instanceof MethodSymbol)) {
       return false;
     }

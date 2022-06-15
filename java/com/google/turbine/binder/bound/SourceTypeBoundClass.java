@@ -29,59 +29,53 @@ import com.google.turbine.type.AnnoInfo;
 import com.google.turbine.type.Type;
 import com.google.turbine.type.Type.ClassTy;
 import com.google.turbine.type.Type.TyKind;
-import org.jspecify.nullness.Nullable;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** A HeaderBoundClass for classes compiled from source. */
 public class SourceTypeBoundClass implements TypeBoundClass {
 
   private final TurbineTyKind kind;
-  private final @Nullable ClassSymbol owner;
+  private final ClassSymbol owner;
   private final ImmutableMap<String, ClassSymbol> children;
 
   private final int access;
   private final ImmutableMap<String, TyVarSymbol> typeParameters;
 
   private final ImmutableMap<TyVarSymbol, TyVarInfo> typeParameterTypes;
-  private final @Nullable Type superClassType;
+  private final Type superClassType;
   private final ImmutableList<Type> interfaceTypes;
-  private final ImmutableList<ClassSymbol> permits;
-  private final ImmutableList<RecordComponentInfo> components;
   private final ImmutableList<MethodInfo> methods;
   private final ImmutableList<FieldInfo> fields;
   private final CompoundScope enclosingScope;
   private final CompoundScope scope;
   private final MemberImportIndex memberImports;
-  private final @Nullable AnnotationMetadata annotationMetadata;
+  private final AnnotationMetadata annotationMetadata;
   private final ImmutableList<AnnoInfo> annotations;
   private final Tree.TyDecl decl;
   private final SourceFile source;
 
   public SourceTypeBoundClass(
       ImmutableList<Type> interfaceTypes,
-      ImmutableList<ClassSymbol> permits,
-      @Nullable Type superClassType,
+      Type superClassType,
       ImmutableMap<TyVarSymbol, TyVarInfo> typeParameterTypes,
       int access,
-      ImmutableList<RecordComponentInfo> components,
       ImmutableList<MethodInfo> methods,
       ImmutableList<FieldInfo> fields,
-      @Nullable ClassSymbol owner,
+      ClassSymbol owner,
       TurbineTyKind kind,
       ImmutableMap<String, ClassSymbol> children,
       ImmutableMap<String, TyVarSymbol> typeParameters,
       CompoundScope enclosingScope,
       CompoundScope scope,
       MemberImportIndex memberImports,
-      @Nullable AnnotationMetadata annotationMetadata,
+      AnnotationMetadata annotationMetadata,
       ImmutableList<AnnoInfo> annotations,
       SourceFile source,
       Tree.TyDecl decl) {
     this.interfaceTypes = interfaceTypes;
-    this.permits = permits;
     this.superClassType = superClassType;
     this.typeParameterTypes = typeParameterTypes;
     this.access = access;
-    this.components = components;
     this.methods = methods;
     this.fields = fields;
     this.owner = owner;
@@ -98,7 +92,7 @@ public class SourceTypeBoundClass implements TypeBoundClass {
   }
 
   @Override
-  public @Nullable ClassSymbol superclass() {
+  public ClassSymbol superclass() {
     if (superClassType == null) {
       return null;
     }
@@ -120,11 +114,6 @@ public class SourceTypeBoundClass implements TypeBoundClass {
   }
 
   @Override
-  public ImmutableList<ClassSymbol> permits() {
-    return permits;
-  }
-
-  @Override
   public int access() {
     return access;
   }
@@ -134,8 +123,9 @@ public class SourceTypeBoundClass implements TypeBoundClass {
     return kind;
   }
 
+  @Nullable
   @Override
-  public @Nullable ClassSymbol owner() {
+  public ClassSymbol owner() {
     return owner;
   }
 
@@ -156,14 +146,8 @@ public class SourceTypeBoundClass implements TypeBoundClass {
 
   /** The super-class type. */
   @Override
-  public @Nullable Type superClassType() {
+  public Type superClassType() {
     return superClassType;
-  }
-
-  /** The record components. */
-  @Override
-  public ImmutableList<RecordComponentInfo> components() {
-    return components;
   }
 
   /** Declared methods. */
@@ -173,7 +157,7 @@ public class SourceTypeBoundClass implements TypeBoundClass {
   }
 
   @Override
-  public @Nullable AnnotationMetadata annotationMetadata() {
+  public AnnotationMetadata annotationMetadata() {
     return annotationMetadata;
   }
 

@@ -25,19 +25,18 @@ import com.google.turbine.binder.sym.TyVarSymbol;
 import com.google.turbine.diag.SourceFile;
 import com.google.turbine.model.TurbineTyKind;
 import com.google.turbine.tree.Tree;
-import org.jspecify.nullness.Nullable;
 
 /** A {@link HeaderBoundClass} that corresponds to a source file being compiled. */
 public class SourceHeaderBoundClass implements HeaderBoundClass {
 
   private final PackageSourceBoundClass base;
-  private final @Nullable ClassSymbol superclass;
+  private final ClassSymbol superclass;
   private final ImmutableList<ClassSymbol> interfaces;
   private final ImmutableMap<String, TyVarSymbol> typeParameters;
 
   public SourceHeaderBoundClass(
       PackageSourceBoundClass base,
-      @Nullable ClassSymbol superclass,
+      ClassSymbol superclass,
       ImmutableList<ClassSymbol> interfaces,
       ImmutableMap<String, TyVarSymbol> typeParameters) {
     this.base = base;
@@ -47,7 +46,7 @@ public class SourceHeaderBoundClass implements HeaderBoundClass {
   }
 
   @Override
-  public @Nullable ClassSymbol superclass() {
+  public ClassSymbol superclass() {
     return superclass;
   }
 
@@ -67,7 +66,7 @@ public class SourceHeaderBoundClass implements HeaderBoundClass {
   }
 
   @Override
-  public @Nullable ClassSymbol owner() {
+  public ClassSymbol owner() {
     return base.owner();
   }
 

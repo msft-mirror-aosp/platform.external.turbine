@@ -17,7 +17,6 @@
 package com.google.turbine.binder.sym;
 
 import com.google.errorprone.annotations.Immutable;
-import org.jspecify.nullness.Nullable;
 
 /** A module symbol. */
 @Immutable
@@ -44,7 +43,7 @@ public class ModuleSymbol implements Symbol {
   }
 
   @Override
-  public boolean equals(@Nullable Object other) {
+  public boolean equals(Object other) {
     return other instanceof ModuleSymbol && name.equals(((ModuleSymbol) other).name);
   }
 

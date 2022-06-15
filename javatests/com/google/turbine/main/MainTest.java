@@ -23,8 +23,7 @@ import static com.google.common.truth.Truth8.assertThat;
 import static com.google.common.truth.extensions.proto.ProtoTruth.assertThat;
 import static com.google.turbine.testing.TestClassPaths.optionsWithBootclasspath;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.Objects.requireNonNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -32,7 +31,6 @@ import com.google.common.io.ByteStreams;
 import com.google.common.io.MoreFiles;
 import com.google.protobuf.ExtensionRegistry;
 import com.google.turbine.diag.TurbineError;
-import com.google.turbine.options.LanguageVersion;
 import com.google.turbine.options.TurbineOptions;
 import com.google.turbine.proto.ManifestProto;
 import java.io.BufferedInputStream;
@@ -42,11 +40,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.io.Writer;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Enumeration;
@@ -93,16 +88,16 @@ public class MainTest {
     }
     Path output = temporaryFolder.newFile("output.jar").toPath();
 
-    TurbineError e =
-        assertThrows(
-            TurbineError.class,
-            () ->
-                Main.compile(
-                    optionsWithBootclasspath()
-                        .setSourceJars(ImmutableList.of(sourcesa.toString(), sourcesb.toString()))
-                        .setOutput(output.toString())
-                        .build()));
-    assertThat(e).hasMessageThat().contains("error: duplicate declaration of Test");
+    try {
+      Main.compile(
+          optionsWithBootclasspath()
+              .setSourceJars(ImmutableList.of(sourcesa.toString(), sourcesb.toString()))
+              .setOutput(output.toString())
+              .build());
+      fail();
+    } catch (TurbineError e) {
+      assertThat(e).hasMessageThat().contains("error: duplicate declaration of Test");
+    }
   }
 
   @Test
@@ -176,7 +171,7 @@ public class MainTest {
 
     Main.compile(
         TurbineOptions.builder()
-            .setLanguageVersion(LanguageVersion.fromJavacopts(ImmutableList.of("--release", "9")))
+            .setRelease("9")
             .setSources(ImmutableList.of(src.toString()))
             .setSourceJars(ImmutableList.of(srcjar.toString()))
             .setOutput(output.toString())
@@ -209,8 +204,8 @@ public class MainTest {
         assertThat(entries.map(JarEntry::getName))
             .containsAtLeast("META-INF/", "META-INF/MANIFEST.MF");
       }
-      Manifest manifest = requireNonNull(jarFile.getManifest());
-      Attributes attributes = requireNonNull(manifest.getMainAttributes());
+      Manifest manifest = jarFile.getManifest();
+      Attributes attributes = manifest.getMainAttributes();
       ImmutableMap<String, ?> entries =
           attributes.entrySet().stream()
               .collect(toImmutableMap(e -> e.getKey().toString(), Map.Entry::getValue));
@@ -220,15 +215,12 @@ public class MainTest {
               "Manifest-Version", "1.0",
               "Target-Label", "//foo:foo",
               "Injecting-Rule-Kind", "foo_library");
-      assertThat(
-              requireNonNull(jarFile.getEntry(JarFile.MANIFEST_NAME))
-                  .getLastModifiedTime()
-                  .toInstant())
+      assertThat(jarFile.getEntry(JarFile.MANIFEST_NAME).getLastModifiedTime().toInstant())
           .isEqualTo(
               LocalDateTime.of(2010, 1, 1, 0, 0, 0).atZone(ZoneId.systemDefault()).toInstant());
     }
     try (JarFile jarFile = new JarFile(gensrcOutput.toFile())) {
-      Manifest manifest = requireNonNull(jarFile.getManifest());
+      Manifest manifest = jarFile.getManifest();
       Attributes attributes = manifest.getMainAttributes();
       ImmutableMap<String, ?> entries =
           attributes.entrySet().stream()
@@ -265,16 +257,16 @@ public class MainTest {
 
     Path output = temporaryFolder.newFile("output.jar").toPath();
 
-    IllegalArgumentException expected =
-        assertThrows(
-            IllegalArgumentException.class,
-            () ->
-                Main.compile(
-                    TurbineOptions.builder()
-                        .setSources(ImmutableList.of(src.toString()))
-                        .setOutput(output.toString())
-                        .build()));
-    assertThat(expected).hasMessageThat().contains("java.lang");
+    try {
+      Main.compile(
+          TurbineOptions.builder()
+              .setSources(ImmutableList.of(src.toString()))
+              .setOutput(output.toString())
+              .build());
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertThat(expected).hasMessageThat().contains("java.lang");
+    }
   }
 
   @Test
@@ -282,17 +274,14 @@ public class MainTest {
     Path src = temporaryFolder.newFile("Test.java").toPath();
     MoreFiles.asCharSink(src, UTF_8).write("public class Test {}");
 
-    UsageException expected =
-        assertThrows(
-            UsageException.class,
-            () ->
-                Main.compile(
-                    optionsWithBootclasspath()
-                        .setSources(ImmutableList.of(src.toString()))
-                        .build()));
-    assertThat(expected)
-        .hasMessageThat()
-        .contains("at least one of --output, --gensrc_output, or --resource_output is required");
+    try {
+      Main.compile(optionsWithBootclasspath().setSources(ImmutableList.of(src.toString())).build());
+      fail();
+    } catch (UsageException expected) {
+      assertThat(expected)
+          .hasMessageThat()
+          .contains("at least one of --output, --gensrc_output, or --resource_output is required");
+    }
   }
 
   @Test
@@ -481,61 +470,5 @@ public class MainTest {
         Stream<JarEntry> entries = jarFile.stream()) {
       assertThat(entries.map(JarEntry::getName)).containsExactly("g/Gen.class");
     }
-  }
-
-  @Test
-  public void testGensrcDirectoryOutput() throws IOException {
-    Path src = temporaryFolder.newFile("Foo.java").toPath();
-    MoreFiles.asCharSink(src, UTF_8).write("package f; @Deprecated class Foo {}");
-
-    Path output = temporaryFolder.newFile("output.jar").toPath();
-    Path gensrc = temporaryFolder.newFolder("gensrcOutput").toPath();
-
-    Main.compile(
-        optionsWithBootclasspath()
-            .setSources(ImmutableList.of(src.toString()))
-            .setTargetLabel("//foo:foo")
-            .setInjectingRuleKind("foo_library")
-            .setOutput(output.toString())
-            .setGensrcOutput(gensrc.toString())
-            .setProcessors(ImmutableList.of(SourceGeneratingProcessor.class.getName()))
-            .build());
-
-    assertThat(listDirectoryContents(gensrc)).containsExactly(gensrc.resolve("g/Gen.java"));
-  }
-
-  @Test
-  public void testResourceDirectoryOutput() throws IOException {
-    Path src = temporaryFolder.newFile("Foo.java").toPath();
-    MoreFiles.asCharSink(src, UTF_8).write("package f; @Deprecated class Foo {}");
-
-    Path output = temporaryFolder.newFile("output.jar").toPath();
-    Path resources = temporaryFolder.newFolder("resources").toPath();
-
-    Main.compile(
-        optionsWithBootclasspath()
-            .setSources(ImmutableList.of(src.toString()))
-            .setTargetLabel("//foo:foo")
-            .setInjectingRuleKind("foo_library")
-            .setOutput(output.toString())
-            .setResourceOutput(resources.toString())
-            .setProcessors(ImmutableList.of(ClassGeneratingProcessor.class.getName()))
-            .build());
-
-    assertThat(listDirectoryContents(resources)).containsExactly(resources.resolve("g/Gen.class"));
-  }
-
-  private static ImmutableList<Path> listDirectoryContents(Path output) throws IOException {
-    ImmutableList.Builder<Path> paths = ImmutableList.builder();
-    Files.walkFileTree(
-        output,
-        new SimpleFileVisitor<Path>() {
-          @Override
-          public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) {
-            paths.add(path);
-            return FileVisitResult.CONTINUE;
-          }
-        });
-    return paths.build();
   }
 }

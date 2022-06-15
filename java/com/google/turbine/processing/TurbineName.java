@@ -19,7 +19,6 @@ package com.google.turbine.processing;
 import static java.util.Objects.requireNonNull;
 
 import javax.lang.model.element.Name;
-import org.jspecify.nullness.Nullable;
 
 /** An implementation of {@link Name} backed by a {@link CharSequence}. */
 public class TurbineName implements Name {
@@ -62,7 +61,7 @@ public class TurbineName implements Name {
   }
 
   @Override
-  public boolean equals(@Nullable Object obj) {
+  public boolean equals(Object obj) {
     return obj instanceof TurbineName && contentEquals(((TurbineName) obj).name);
   }
 }

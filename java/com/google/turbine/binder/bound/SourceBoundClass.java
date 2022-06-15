@@ -20,19 +20,18 @@ import com.google.common.collect.ImmutableMap;
 import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.model.TurbineTyKind;
 import com.google.turbine.tree.Tree;
-import org.jspecify.nullness.Nullable;
 
 /** A {@link BoundClass} that corresponds to a source file being compiled. */
 public class SourceBoundClass implements BoundClass {
   private final ClassSymbol sym;
-  private final @Nullable ClassSymbol owner;
+  private final ClassSymbol owner;
   private final ImmutableMap<String, ClassSymbol> children;
   private final int access;
   private final Tree.TyDecl decl;
 
   public SourceBoundClass(
       ClassSymbol sym,
-      @Nullable ClassSymbol owner,
+      ClassSymbol owner,
       ImmutableMap<String, ClassSymbol> children,
       int access,
       Tree.TyDecl decl) {
@@ -53,7 +52,7 @@ public class SourceBoundClass implements BoundClass {
   }
 
   @Override
-  public @Nullable ClassSymbol owner() {
+  public ClassSymbol owner() {
     return owner;
   }
 

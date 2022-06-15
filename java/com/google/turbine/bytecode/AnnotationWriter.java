@@ -33,9 +33,8 @@ import com.google.turbine.bytecode.ClassFile.TypeAnnotationInfo.ThrowsTarget;
 import com.google.turbine.bytecode.ClassFile.TypeAnnotationInfo.TypeParameterBoundTarget;
 import com.google.turbine.bytecode.ClassFile.TypeAnnotationInfo.TypeParameterTarget;
 import com.google.turbine.bytecode.ClassFile.TypeAnnotationInfo.TypePath;
-import com.google.turbine.model.Const;
 import com.google.turbine.model.Const.Value;
-import java.util.Map;
+import java.util.Map.Entry;
 
 /** Writes an {@link AnnotationInfo} to a class file. */
 public class AnnotationWriter {
@@ -51,7 +50,7 @@ public class AnnotationWriter {
   public void writeAnnotation(AnnotationInfo annotation) {
     output.writeShort(pool.utf8(annotation.typeName()));
     output.writeShort(annotation.elementValuePairs().size());
-    for (Map.Entry<String, ElementValue> entry : annotation.elementValuePairs().entrySet()) {
+    for (Entry<String, ElementValue> entry : annotation.elementValuePairs().entrySet()) {
       output.writeShort(pool.utf8(entry.getKey()));
       writeElementValue(entry.getValue());
     }
@@ -80,31 +79,31 @@ public class AnnotationWriter {
   private void writeConstElementValue(Value value) {
     switch (value.constantTypeKind()) {
       case BYTE:
-        writeConst('B', pool.integer(((Const.ByteValue) value).value()));
+        writeConst('B', pool.integer(value.asInteger().value()));
         break;
       case CHAR:
-        writeConst('C', pool.integer(((Const.CharValue) value).value()));
+        writeConst('C', pool.integer(value.asInteger().value()));
         break;
       case SHORT:
-        writeConst('S', pool.integer(((Const.ShortValue) value).value()));
+        writeConst('S', pool.integer(value.asInteger().value()));
         break;
       case DOUBLE:
-        writeConst('D', pool.doubleInfo(((Const.DoubleValue) value).value()));
+        writeConst('D', pool.doubleInfo(value.asDouble().value()));
         break;
       case FLOAT:
-        writeConst('F', pool.floatInfo(((Const.FloatValue) value).value()));
+        writeConst('F', pool.floatInfo(value.asFloat().value()));
         break;
       case INT:
-        writeConst('I', pool.integer(((Const.IntValue) value).value()));
+        writeConst('I', pool.integer(value.asInteger().value()));
         break;
       case LONG:
-        writeConst('J', pool.longInfo(((Const.LongValue) value).value()));
+        writeConst('J', pool.longInfo(value.asLong().value()));
         break;
       case STRING:
-        writeConst('s', pool.utf8(((Const.StringValue) value).value()));
+        writeConst('s', pool.utf8(value.asString().value()));
         break;
       case BOOLEAN:
-        writeConst('Z', pool.integer(((Const.BooleanValue) value).value() ? 1 : 0));
+        writeConst('Z', pool.integer(value.asBoolean().value() ? 1 : 0));
         break;
       default:
         throw new AssertionError(value.constantTypeKind());

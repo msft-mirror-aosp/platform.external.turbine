@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.jspecify.nullness;
+package org.checkerframework.checker.nullness.compatqual;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -37,4 +37,4 @@ import java.lang.annotation.Target;
   ElementType.TYPE_USE
 })
 @Retention(RetentionPolicy.SOURCE)
-public @interface NullMarked {}
+public @interface NullableDecl {}

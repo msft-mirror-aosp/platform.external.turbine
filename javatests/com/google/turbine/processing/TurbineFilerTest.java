@@ -19,7 +19,7 @@ package com.google.turbine.processing;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Function;
 import com.google.common.base.Supplier;
@@ -40,7 +40,7 @@ import javax.lang.model.element.Element;
 import javax.tools.FileObject;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
-import org.jspecify.nullness.Nullable;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -56,8 +56,9 @@ public class TurbineFilerTest {
   public void setup() {
     Function<String, Supplier<byte[]>> classpath =
         new Function<String, Supplier<byte[]>>() {
+          @Nullable
           @Override
-          public @Nullable Supplier<byte[]> apply(String input) {
+          public Supplier<byte[]> apply(String input) {
             return null;
           }
         };
@@ -97,13 +98,19 @@ public class TurbineFilerTest {
     seen.add("com/foo/Bar.java");
     seen.add("com/foo/Baz.class");
 
-    assertThrows(
-        FilerException.class, () -> filer.createSourceFile("com.foo.Bar", (Element[]) null));
-    JavaFileObject unused = filer.createSourceFile("com.foo.Baz", (Element[]) null);
+    try {
+      filer.createSourceFile("com.foo.Bar", (Element[]) null);
+      fail();
+    } catch (FilerException expected) {
+    }
+    filer.createSourceFile("com.foo.Baz", (Element[]) null);
 
-    unused = filer.createClassFile("com.foo.Bar", (Element[]) null);
-    assertThrows(
-        FilerException.class, () -> filer.createClassFile("com.foo.Baz", (Element[]) null));
+    filer.createClassFile("com.foo.Bar", (Element[]) null);
+    try {
+      filer.createClassFile("com.foo.Baz", (Element[]) null);
+      fail();
+    } catch (FilerException expected) {
+    }
   }
 
   @Test
@@ -114,7 +121,11 @@ public class TurbineFilerTest {
             StandardLocation.SOURCE_OUTPUT,
             StandardLocation.ANNOTATION_PROCESSOR_PATH,
             StandardLocation.CLASS_PATH)) {
-      assertThrows(FileNotFoundException.class, () -> filer.getResource(location, "", "NoSuch"));
+      try {
+        filer.getResource(location, "", "NoSuch");
+        fail();
+      } catch (FileNotFoundException expected) {
+      }
     }
   }
 
@@ -124,7 +135,7 @@ public class TurbineFilerTest {
     try (Writer writer = classFile.openWriter()) {
       writer.write("hello");
     }
-    Collection<SourceFile> unused = filer.finishRound();
+    filer.finishRound();
 
     FileObject output = filer.getResource(StandardLocation.SOURCE_OUTPUT, "com.foo", "Bar.java");
     assertThat(new String(ByteStreams.toByteArray(output.openInputStream()), UTF_8))
@@ -139,7 +150,7 @@ public class TurbineFilerTest {
     try (OutputStream os = classFile.openOutputStream()) {
       os.write("goodbye".getBytes(UTF_8));
     }
-    Collection<SourceFile> unused = filer.finishRound();
+    filer.finishRound();
 
     FileObject output = filer.getResource(StandardLocation.CLASS_OUTPUT, "com.foo", "Baz.class");
     assertThat(new String(ByteStreams.toByteArray(output.openInputStream()), UTF_8))

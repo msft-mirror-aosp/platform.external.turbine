@@ -23,10 +23,9 @@ import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.model.TurbineElementType;
 import java.lang.annotation.RetentionPolicy;
 import java.util.EnumSet;
-import org.jspecify.nullness.Nullable;
 
 /**
- * Annotation metadata, e.g. from {@link java.lang.annotation.Target}, {@link
+ * Annotation metadata, e.g. from {@link @java.lang.annotation.Target}, {@link
  * java.lang.annotation.Retention}, and {@link java.lang.annotation.Repeatable}.
  */
 public class AnnotationMetadata {
@@ -42,12 +41,12 @@ public class AnnotationMetadata {
 
   private final RetentionPolicy retention;
   private final ImmutableSet<TurbineElementType> target;
-  private final @Nullable ClassSymbol repeatable;
+  private final ClassSymbol repeatable;
 
   public AnnotationMetadata(
-      @Nullable RetentionPolicy retention,
-      @Nullable ImmutableSet<TurbineElementType> annotationTarget,
-      @Nullable ClassSymbol repeatable) {
+      RetentionPolicy retention,
+      ImmutableSet<TurbineElementType> annotationTarget,
+      ClassSymbol repeatable) {
     this.retention = firstNonNull(retention, RetentionPolicy.CLASS);
     this.target = firstNonNull(annotationTarget, DEFAULT_TARGETS);
     this.repeatable = repeatable;
@@ -64,7 +63,7 @@ public class AnnotationMetadata {
   }
 
   /** The container annotation for {@code @Repeated} annotations. */
-  public @Nullable ClassSymbol repeatable() {
+  public ClassSymbol repeatable() {
     return repeatable;
   }
 }

@@ -46,7 +46,6 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
-import org.jspecify.nullness.Nullable;
 
 /** Translator from {@link Type}s to {@link Sig}natures. */
 public class LowerSignature {
@@ -128,14 +127,16 @@ public class LowerSignature {
    * Produces a method signature attribute for a generic method, or {@code null} if the signature is
    * unnecessary.
    */
-  public @Nullable String methodSignature(
-      Env<ClassSymbol, TypeBoundClass> env, TypeBoundClass.MethodInfo method, ClassSymbol sym) {
+  public String methodSignature(
+      Env<ClassSymbol, TypeBoundClass> env,
+      SourceTypeBoundClass.MethodInfo method,
+      ClassSymbol sym) {
     if (!needsMethodSig(sym, env, method)) {
       return null;
     }
     ImmutableList<Sig.TyParamSig> typarams = tyParamSig(method.tyParams(), env);
     ImmutableList.Builder<Sig.TySig> fparams = ImmutableList.builder();
-    for (TypeBoundClass.ParamInfo t : method.parameters()) {
+    for (SourceTypeBoundClass.ParamInfo t : method.parameters()) {
       if (t.synthetic()) {
         continue;
       }
@@ -160,11 +161,14 @@ public class LowerSignature {
   }
 
   private boolean needsMethodSig(
-      ClassSymbol sym, Env<ClassSymbol, TypeBoundClass> env, TypeBoundClass.MethodInfo m) {
-    if ((env.getNonNull(sym).access() & TurbineFlag.ACC_ENUM) == TurbineFlag.ACC_ENUM
+      ClassSymbol sym, Env<ClassSymbol, TypeBoundClass> env, SourceTypeBoundClass.MethodInfo m) {
+    if ((env.get(sym).access() & TurbineFlag.ACC_ENUM) == TurbineFlag.ACC_ENUM
         && m.name().equals("<init>")) {
       // JDK-8024694: javac always expects signature attribute for enum constructors
       return true;
+    }
+    if ((m.access() & TurbineFlag.ACC_SYNTH_CTOR) == TurbineFlag.ACC_SYNTH_CTOR) {
+      return false;
     }
     if (!m.tyParams().isEmpty()) {
       return true;
@@ -172,7 +176,7 @@ public class LowerSignature {
     if (m.returnType() != null && needsSig(m.returnType())) {
       return true;
     }
-    for (TypeBoundClass.ParamInfo t : m.parameters()) {
+    for (SourceTypeBoundClass.ParamInfo t : m.parameters()) {
       if (t.synthetic()) {
         continue;
       }
@@ -192,13 +196,16 @@ public class LowerSignature {
    * Produces a class signature attribute for a generic class, or {@code null} if the signature is
    * unnecessary.
    */
-  public @Nullable String classSignature(
-      SourceTypeBoundClass info, Env<ClassSymbol, TypeBoundClass> env) {
+  public String classSignature(SourceTypeBoundClass info, Env<ClassSymbol, TypeBoundClass> env) {
     if (!classNeedsSig(info)) {
       return null;
     }
     ImmutableList<Sig.TyParamSig> typarams = tyParamSig(info.typeParameterTypes(), env);
-    ClassTySig xtnd = classTySig((ClassTy) info.superClassType());
+
+    ClassTySig xtnd = null;
+    if (info.superClassType() != null) {
+      xtnd = classTySig((ClassTy) info.superClassType());
+    }
     ImmutableList.Builder<ClassTySig> impl = ImmutableList.builder();
     for (Type i : info.interfaceTypes()) {
       impl.add(classTySig((ClassTy) i));
@@ -210,7 +217,7 @@ public class LowerSignature {
   /**
    * A field signature, or {@code null} if the descriptor provides all necessary type information.
    */
-  public @Nullable String fieldSignature(Type type) {
+  public String fieldSignature(Type type) {
     return needsSig(type) ? SigWriter.type(signature(type)) : null;
   }
 
@@ -255,14 +262,14 @@ public class LowerSignature {
   private ImmutableList<Sig.TyParamSig> tyParamSig(
       Map<TyVarSymbol, TyVarInfo> px, Env<ClassSymbol, TypeBoundClass> env) {
     ImmutableList.Builder<Sig.TyParamSig> result = ImmutableList.builder();
-    for (Map.Entry<TyVarSymbol, TyVarInfo> entry : px.entrySet()) {
+    for (Map.Entry<TyVarSymbol, SourceTypeBoundClass.TyVarInfo> entry : px.entrySet()) {
       result.add(tyParamSig(entry.getKey(), entry.getValue(), env));
     }
     return result.build();
   }
 
   private Sig.TyParamSig tyParamSig(
-      TyVarSymbol sym, TyVarInfo info, Env<ClassSymbol, TypeBoundClass> env) {
+      TyVarSymbol sym, SourceTypeBoundClass.TyVarInfo info, Env<ClassSymbol, TypeBoundClass> env) {
 
     String identifier = sym.name();
     Sig.TySig cbound = null;
@@ -290,7 +297,7 @@ public class LowerSignature {
 
   private boolean isInterface(Type type, Env<ClassSymbol, TypeBoundClass> env) {
     return type.tyKind() == TyKind.CLASS_TY
-        && env.getNonNull(((ClassTy) type).sym()).kind() == TurbineTyKind.INTERFACE;
+        && env.get(((ClassTy) type).sym()).kind() == TurbineTyKind.INTERFACE;
   }
 
   public String descriptor(ClassSymbol sym) {

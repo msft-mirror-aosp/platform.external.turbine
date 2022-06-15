@@ -31,27 +31,26 @@ import com.google.turbine.tree.Tree;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
-import org.jspecify.nullness.Nullable;
 
 /** Qualified name resolution. */
-public final class Resolve {
+public class Resolve {
 
   /**
    * Performs JLS 6.5.5.2 qualified type name resolution of a type with the given simple name,
    * qualified by the given symbol. The search considers members that are inherited from
    * superclasses or interfaces.
    */
-  public static @Nullable ClassSymbol resolve(
+  public static ClassSymbol resolve(
       Env<ClassSymbol, ? extends HeaderBoundClass> env,
-      @Nullable ClassSymbol origin,
+      ClassSymbol origin,
       ClassSymbol sym,
       Tree.Ident simpleName) {
     return resolve(env, origin, sym, simpleName, new HashSet<>());
   }
 
-  private static @Nullable ClassSymbol resolve(
+  private static ClassSymbol resolve(
       Env<ClassSymbol, ? extends HeaderBoundClass> env,
-      @Nullable ClassSymbol origin,
+      ClassSymbol origin,
       ClassSymbol sym,
       Tree.Ident simpleName,
       Set<ClassSymbol> seen) {
@@ -70,13 +69,13 @@ public final class Resolve {
     }
     if (bound.superclass() != null) {
       result = resolve(env, origin, bound.superclass(), simpleName, seen);
-      if (result != null && visible(origin, result, env.getNonNull(result))) {
+      if (result != null && visible(origin, result, env.get(result))) {
         return result;
       }
     }
     for (ClassSymbol i : bound.interfaces()) {
       result = resolve(env, origin, i, simpleName, seen);
-      if (result != null && visible(origin, result, env.getNonNull(result))) {
+      if (result != null && visible(origin, result, env.get(result))) {
         return result;
       }
     }
@@ -88,10 +87,10 @@ public final class Resolve {
    * env} and {@code origin} symbol.
    */
   public static ResolveFunction resolveFunction(
-      Env<ClassSymbol, ? extends HeaderBoundClass> env, @Nullable ClassSymbol origin) {
+      Env<ClassSymbol, ? extends HeaderBoundClass> env, ClassSymbol origin) {
     return new ResolveFunction() {
       @Override
-      public @Nullable ClassSymbol resolveOne(ClassSymbol base, Tree.Ident name) {
+      public ClassSymbol resolveOne(ClassSymbol base, Tree.Ident name) {
         try {
           return Resolve.resolve(env, origin, base, name);
         } catch (LazyBindingError e) {
@@ -114,24 +113,24 @@ public final class Resolve {
     }
 
     @Override
-    public @Nullable ClassSymbol resolveOne(ClassSymbol sym, Tree.Ident bit) {
+    public ClassSymbol resolveOne(ClassSymbol sym, Tree.Ident bit) {
       BoundClass ci = env.get(sym);
       if (ci == null) {
         return null;
       }
-      ClassSymbol result = ci.children().get(bit.value());
-      if (result == null) {
+      sym = ci.children().get(bit.value());
+      if (sym == null) {
         return null;
       }
-      if (!visible(result)) {
+      if (!visible(sym)) {
         return null;
       }
-      return result;
+      return sym;
     }
 
     @Override
     public boolean visible(ClassSymbol sym) {
-      TurbineVisibility visibility = TurbineVisibility.fromAccess(env.getNonNull(sym).access());
+      TurbineVisibility visibility = TurbineVisibility.fromAccess(env.get(sym).access());
       switch (visibility) {
         case PUBLIC:
           return true;
@@ -150,17 +149,14 @@ public final class Resolve {
    * qualified by the given symbol. The search considers members that are inherited from
    * superclasses or interfaces.
    */
-  public static @Nullable FieldInfo resolveField(
-      Env<ClassSymbol, TypeBoundClass> env,
-      @Nullable ClassSymbol origin,
-      ClassSymbol sym,
-      Tree.Ident name) {
+  public static FieldInfo resolveField(
+      Env<ClassSymbol, TypeBoundClass> env, ClassSymbol origin, ClassSymbol sym, Tree.Ident name) {
     return resolveField(env, origin, sym, name, new HashSet<>());
   }
 
-  private static @Nullable FieldInfo resolveField(
+  private static FieldInfo resolveField(
       Env<ClassSymbol, TypeBoundClass> env,
-      @Nullable ClassSymbol origin,
+      ClassSymbol origin,
       ClassSymbol sym,
       Tree.Ident name,
       Set<ClassSymbol> seen) {
@@ -193,26 +189,23 @@ public final class Resolve {
   }
 
   /** Is the given field visible when inherited into class origin? */
-  private static boolean visible(@Nullable ClassSymbol origin, FieldInfo info) {
+  private static boolean visible(ClassSymbol origin, FieldInfo info) {
     return visible(origin, info.sym().owner(), info.access());
   }
 
   /** Is the given type visible when inherited into class origin? */
-  private static boolean visible(
-      @Nullable ClassSymbol origin, ClassSymbol sym, HeaderBoundClass info) {
+  private static boolean visible(ClassSymbol origin, ClassSymbol sym, HeaderBoundClass info) {
     return visible(origin, sym, info.access());
   }
 
-  private static boolean visible(@Nullable ClassSymbol origin, ClassSymbol owner, int access) {
+  private static boolean visible(ClassSymbol origin, ClassSymbol owner, int access) {
     TurbineVisibility visibility = TurbineVisibility.fromAccess(access);
     switch (visibility) {
       case PUBLIC:
       case PROTECTED:
         return true;
       case PACKAGE:
-        // origin can be null if we aren't in a package scope (e.g. we're processing a module
-        // declaration), in which case package-visible members aren't visible
-        return origin != null && Objects.equals(owner.packageName(), origin.packageName());
+        return Objects.equals(owner.packageName(), origin.packageName());
       case PRIVATE:
         // Private members of lexically enclosing declarations are not handled,
         // since this visibility check is only used for inherited members.
@@ -220,6 +213,4 @@ public final class Resolve {
     }
     throw new AssertionError(visibility);
   }
-
-  private Resolve() {}
 }

@@ -42,7 +42,6 @@ public class ParserIntegrationTest {
   public static Iterable<Object[]> parameters() {
     String[] tests = {
       "anno1.input",
-      "anno2.input",
       "annodecl1.input",
       "annodecl2.input",
       "annodecl3.input",
@@ -76,8 +75,6 @@ public class ParserIntegrationTest {
       "weirdstring.input",
       "type_annotations.input",
       "module-info.input",
-      "record.input",
-      "sealed.input",
     };
     return Iterables.transform(
         Arrays.asList(tests),

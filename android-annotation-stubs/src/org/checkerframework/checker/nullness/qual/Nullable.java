@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.jspecify.nullness;
+package org.checkerframework.checker.nullness.qual;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

@@ -20,10 +20,10 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Streams;
 import com.google.turbine.binder.ClassPath;
 import com.google.turbine.binder.ClassPathBinder;
-import com.google.turbine.binder.JimageClassBinder;
-import com.google.turbine.options.LanguageVersion;
+import com.google.turbine.binder.CtSymClassBinder;
 import com.google.turbine.options.TurbineOptions;
 import java.io.File;
 import java.io.IOException;
@@ -33,14 +33,15 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
 
-public final class TestClassPaths {
+public class TestClassPaths {
 
   private static final Splitter CLASS_PATH_SPLITTER =
       Splitter.on(File.pathSeparatorChar).omitEmptyStrings();
 
-  public static final ImmutableList<Path> BOOTCLASSPATH =
-      CLASS_PATH_SPLITTER
-          .splitToStream(Optional.ofNullable(System.getProperty("sun.boot.class.path")).orElse(""))
+  private static final ImmutableList<Path> BOOTCLASSPATH =
+      Streams.stream(
+              CLASS_PATH_SPLITTER.split(
+                  Optional.ofNullable(System.getProperty("sun.boot.class.path")).orElse("")))
           .map(Paths::get)
           .filter(Files::exists)
           .collect(toImmutableList());
@@ -52,7 +53,7 @@ public final class TestClassPaths {
       if (!BOOTCLASSPATH.isEmpty()) {
         return ClassPathBinder.bindClasspath(BOOTCLASSPATH);
       }
-      return JimageClassBinder.bindDefault();
+      return CtSymClassBinder.bind("8");
     } catch (IOException e) {
       e.printStackTrace();
       throw new UncheckedIOException(e);
@@ -69,10 +70,8 @@ public final class TestClassPaths {
       options.setBootClassPath(
           BOOTCLASSPATH.stream().map(Path::toString).collect(toImmutableList()));
     } else {
-      options.setLanguageVersion(LanguageVersion.fromJavacopts(ImmutableList.of("--release", "8")));
+      options.setRelease("8");
     }
     return options;
   }
-
-  private TestClassPaths() {}
 }
