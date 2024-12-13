@@ -19,7 +19,7 @@ package com.google.turbine.binder.bound;
 import com.google.common.collect.ImmutableMap;
 import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.model.TurbineTyKind;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The initial bound tree representation.
@@ -32,8 +32,7 @@ public interface BoundClass {
   TurbineTyKind kind();
 
   /** The enclosing declaration for member types, or {@code null} for top-level declarations. */
-  @Nullable
-  ClassSymbol owner();
+  @Nullable ClassSymbol owner();
 
   /** Class access bits (see JVMS table 4.1). */
   int access();

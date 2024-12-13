@@ -74,14 +74,15 @@ import java.util.ArrayDeque;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Constant expression evaluation.
  *
- * <p>JLS §15.4 requires this class to be strictfp.
+ * <p>This class requires strict floating point operations. In Java SE 17 and later, the Java SE
+ * Platform always requires strict evaluation of floating-point expressions.
  */
-public strictfp class ConstEvaluator {
+public class ConstEvaluator {
 
   /** The symbol of the originating class, for visibility checks. */
   private final @Nullable ClassSymbol origin;
@@ -212,7 +213,7 @@ public strictfp class ConstEvaluator {
     LookupResult result = scope.lookup(new LookupKey(ImmutableList.copyOf(flat)));
     if (result == null) {
       log.error(classTy.position(), ErrorKind.CANNOT_RESOLVE, flat.getFirst());
-      return Type.ErrorTy.create(flat);
+      return Type.ErrorTy.create(flat, ImmutableList.of());
     }
     if (result.sym().symKind() != Symbol.Kind.CLASS) {
       throw error(classTy.position(), ErrorKind.UNEXPECTED_TYPE_PARAMETER, flat.getFirst());
@@ -234,8 +235,7 @@ public strictfp class ConstEvaluator {
   }
 
   /** Evaluates a reference to another constant variable. */
-  @Nullable
-  Const evalConstVar(ConstVarName t) {
+  @Nullable Const evalConstVar(ConstVarName t) {
     FieldInfo field = resolveField(t);
     if (field == null) {
       return null;
@@ -1312,8 +1312,7 @@ public strictfp class ConstEvaluator {
     return new Const.ArrayInitValue(elements.build());
   }
 
-  @Nullable
-  Const evalAnnotationValue(Tree tree, Type ty) {
+  @Nullable Const evalAnnotationValue(Tree tree, Type ty) {
     if (ty == null) {
       throw error(tree.position(), ErrorKind.EXPRESSION_ERROR);
     }

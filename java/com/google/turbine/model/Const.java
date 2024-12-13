@@ -18,10 +18,10 @@ package com.google.turbine.model;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.common.escape.SourceCodeEscapers;
+import com.google.turbine.escape.SourceCodeEscapers;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.AnnotationValueVisitor;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Compile-time constant expressions, including literals of primitive or String type, class

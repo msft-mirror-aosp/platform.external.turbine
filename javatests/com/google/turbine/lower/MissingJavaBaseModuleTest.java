@@ -16,15 +16,13 @@
 
 package com.google.turbine.lower;
 
-import static com.google.common.base.StandardSystemProperty.JAVA_CLASS_VERSION;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
-import static org.junit.Assert.assertEquals;
+import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.turbine.binder.ClassPath;
-import com.google.turbine.binder.CtSymClassBinder;
 import com.google.turbine.binder.JimageClassBinder;
 import com.google.turbine.binder.bound.ModuleInfo;
 import com.google.turbine.binder.bytecode.BytecodeBoundClass;
@@ -34,13 +32,13 @@ import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.binder.sym.ModuleSymbol;
 import java.util.Map;
 import java.util.Optional;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
-public class MissingJavaBaseModule {
+public class MissingJavaBaseModuleTest {
 
   @Test
   public void test() throws Exception {
@@ -51,10 +49,7 @@ public class MissingJavaBaseModule {
         IntegrationTestSupport.runJavac(
             sources, ImmutableList.of(), ImmutableList.of("--release", "9", "--module-version=42"));
 
-    ClassPath base =
-        Double.parseDouble(JAVA_CLASS_VERSION.value()) < 54
-            ? JimageClassBinder.bindDefault()
-            : CtSymClassBinder.bind(9);
+    ClassPath base = JimageClassBinder.bindDefault();
     ClassPath bootclasspath =
         new ClassPath() {
           @Override
@@ -93,7 +88,10 @@ public class MissingJavaBaseModule {
             Optional.of("42"),
             /* javacopts= */ ImmutableList.of());
 
-    assertEquals(dump(expected), dump(actual));
+    // normalize output after https://bugs.openjdk.org/browse/JDK-8320766
+    String expectedOutput = dump(expected).replace("  // version 9\n", "");
+
+    assertThat(dump(actual)).isEqualTo(expectedOutput);
   }
 
   private String dump(Map<String, byte[]> map) throws Exception {
