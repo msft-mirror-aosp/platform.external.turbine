@@ -53,7 +53,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** Constructs a platform {@link ClassPath} from the current JDK's jimage file using jrtfs. */
 public class JimageClassBinder {
@@ -105,14 +105,12 @@ public class JimageClassBinder {
     this.modulesRoot = modules;
   }
 
-  @Nullable
-  Path modulePath(String moduleName) {
+  @Nullable Path modulePath(String moduleName) {
     Path path = modulesRoot.resolve(moduleName);
     return Files.exists(path) ? path : null;
   }
 
-  @Nullable
-  ModuleInfo module(String moduleName) {
+  @Nullable ModuleInfo module(String moduleName) {
     ModuleInfo result = moduleMap.get(moduleName);
     if (result == null) {
       Path path = modulePath(moduleName);

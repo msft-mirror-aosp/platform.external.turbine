@@ -16,7 +16,7 @@
 
 package com.google.turbine.binder.lookup;
 
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** A scope that defines types, and supports qualified name resolution. */
 public interface Scope {
@@ -24,6 +24,5 @@ public interface Scope {
    * Performs qualified name lookup on the given {@link LookupKey}, and returns either a {@link
    * LookupResult} or else {@code null} indicating that the name could not be resolved.
    */
-  @Nullable
-  LookupResult lookup(LookupKey lookupKey);
+  @Nullable LookupResult lookup(LookupKey lookupKey);
 }

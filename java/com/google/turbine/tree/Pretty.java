@@ -35,7 +35,7 @@ import com.google.turbine.tree.Tree.ModUses;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** A pretty-printer for {@link Tree}s. */
 public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
@@ -108,17 +108,28 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
 
   @Override
   public @Nullable Void visitArrTy(Tree.ArrTy arrTy, @Nullable Void input) {
-    arrTy.elem().accept(this, null);
-    if (!arrTy.annos().isEmpty()) {
-      append(' ');
-      printAnnos(arrTy.annos());
+    ImmutableList.Builder<Tree.ArrTy> flat = ImmutableList.builder();
+    Tree next = arrTy;
+    do {
+      Tree.ArrTy curr = (Tree.ArrTy) next;
+      flat.add(curr);
+      next = curr.elem();
+    } while (next.kind().equals(Tree.Kind.ARR_TY));
+
+    next.accept(this, null);
+    for (Tree.ArrTy dim : flat.build()) {
+      if (!dim.annos().isEmpty()) {
+        append(' ');
+        printAnnos(dim.annos());
+      }
+      append("[]");
     }
-    append("[]");
     return null;
   }
 
   @Override
   public @Nullable Void visitPrimTy(Tree.PrimTy primTy, @Nullable Void input) {
+    printAnnos(primTy.annos());
     append(primTy.tykind().toString());
     return null;
   }
@@ -545,6 +556,7 @@ public class Pretty implements Tree.Visitor<@Nullable Void, @Nullable Void> {
         case ACC_SYNTHETIC:
         case ACC_BRIDGE:
         case COMPACT_CTOR:
+        case ENUM_IMPL:
           break;
       }
     }

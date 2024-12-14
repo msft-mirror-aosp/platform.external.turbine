@@ -51,6 +51,7 @@ import com.google.turbine.binder.sym.TyVarSymbol;
 import com.google.turbine.bytecode.ClassFile;
 import com.google.turbine.bytecode.ClassFile.AnnotationInfo;
 import com.google.turbine.bytecode.ClassFile.AnnotationInfo.ElementValue;
+import com.google.turbine.bytecode.ClassFile.AnnotationInfo.RuntimeVisibility;
 import com.google.turbine.bytecode.ClassFile.MethodInfo.ParameterInfo;
 import com.google.turbine.bytecode.ClassFile.TypeAnnotationInfo;
 import com.google.turbine.bytecode.ClassFile.TypeAnnotationInfo.Target;
@@ -80,15 +81,13 @@ import com.google.turbine.type.Type.TyVar;
 import com.google.turbine.type.Type.WildTy;
 import com.google.turbine.types.Erasure;
 import java.lang.annotation.RetentionPolicy;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** Lowering from bound classes to bytecode. */
 public class Lower {
@@ -433,13 +432,13 @@ public class Lower {
       }
       ImmutableList.Builder<AnnotationInfo> parameterAnnotations = ImmutableList.builder();
       for (AnnoInfo annotation : parameter.annotations()) {
-        Boolean visible = isVisible(annotation.sym());
-        if (visible == null) {
+        RuntimeVisibility visibility = getVisibility(annotation.sym());
+        if (visibility == null) {
           continue;
         }
         String desc = sig.objectType(annotation.sym());
         parameterAnnotations.add(
-            new AnnotationInfo(desc, visible, annotationValues(annotation.values())));
+            new AnnotationInfo(desc, visibility, annotationValues(annotation.values())));
       }
       annotations.add(parameterAnnotations.build());
     }
@@ -638,26 +637,26 @@ public class Lower {
   }
 
   private @Nullable AnnotationInfo lowerAnnotation(AnnoInfo annotation) {
-    Boolean visible = isVisible(annotation.sym());
-    if (visible == null) {
+    RuntimeVisibility visibility = getVisibility(annotation.sym());
+    if (visibility == null) {
       return null;
     }
     return new AnnotationInfo(
-        sig.objectType(annotation.sym()), visible, annotationValues(annotation.values()));
+        sig.objectType(annotation.sym()), visibility, annotationValues(annotation.values()));
   }
 
   /**
    * Returns true if the annotation is visible at runtime, false if it is not visible at runtime,
    * and {@code null} if it should not be retained in bytecode.
    */
-  private @Nullable Boolean isVisible(ClassSymbol sym) {
+  private @Nullable RuntimeVisibility getVisibility(ClassSymbol sym) {
     RetentionPolicy retention =
         requireNonNull(env.getNonNull(sym).annotationMetadata()).retention();
     switch (retention) {
       case CLASS:
-        return false;
+        return RuntimeVisibility.INVISIBLE;
       case RUNTIME:
-        return true;
+        return RuntimeVisibility.VISIBLE;
       case SOURCE:
         return null;
     }
@@ -698,14 +697,14 @@ public class Lower {
       case ANNOTATION:
         {
           TurbineAnnotationValue annotationValue = (TurbineAnnotationValue) value;
-          Boolean visible = isVisible(annotationValue.sym());
-          if (visible == null) {
-            visible = true;
+          RuntimeVisibility visibility = getVisibility(annotationValue.sym());
+          if (visibility == null) {
+            visibility = RuntimeVisibility.VISIBLE;
           }
           return new ElementValue.ConstTurbineAnnotationValue(
               new AnnotationInfo(
                   sig.objectType(annotationValue.sym()),
-                  visible,
+                  visibility,
                   annotationValues(annotationValue.values())));
         }
       case PRIMITIVE:
@@ -723,12 +722,12 @@ public class Lower {
             result,
             info.superClassType(),
             TargetType.SUPERTYPE,
-            new TypeAnnotationInfo.SuperTypeTarget(-1));
+            TypeAnnotationInfo.SuperTypeTarget.create(-1));
       }
       int idx = 0;
       for (Type i : info.interfaceTypes()) {
         lowerTypeAnnotations(
-            result, i, TargetType.SUPERTYPE, new TypeAnnotationInfo.SuperTypeTarget(idx++));
+            result, i, TargetType.SUPERTYPE, TypeAnnotationInfo.SuperTypeTarget.create(idx++));
       }
     }
     typeParameterAnnotations(
@@ -752,7 +751,7 @@ public class Lower {
     {
       int idx = 0;
       for (Type e : m.exceptions()) {
-        lowerTypeAnnotations(result, e, TargetType.METHOD_THROWS, new ThrowsTarget(idx++));
+        lowerTypeAnnotations(result, e, TargetType.METHOD_THROWS, ThrowsTarget.create(idx++));
       }
     }
 
@@ -777,7 +776,7 @@ public class Lower {
             result,
             p.type(),
             TargetType.METHOD_FORMAL_PARAMETER,
-            new TypeAnnotationInfo.FormalParameterTarget(idx++));
+            TypeAnnotationInfo.FormalParameterTarget.create(idx++));
       }
     }
 
@@ -803,7 +802,7 @@ public class Lower {
         result.add(
             new TypeAnnotationInfo(
                 targetType,
-                new TypeAnnotationInfo.TypeParameterTarget(typeParameterIndex),
+                TypeAnnotationInfo.TypeParameterTarget.create(typeParameterIndex),
                 TypePath.root(),
                 info));
       }
@@ -817,7 +816,7 @@ public class Lower {
             result,
             i,
             boundTargetType,
-            new TypeAnnotationInfo.TypeParameterBoundTarget(typeParameterIndex, boundIndex++));
+            TypeAnnotationInfo.TypeParameterBoundTarget.create(typeParameterIndex, boundIndex++));
       }
       typeParameterIndex++;
     }
@@ -864,7 +863,7 @@ public class Lower {
           lowerClassTypeTypeAnnotations((ClassTy) type, path);
           break;
         case ARRAY_TY:
-          lowerArrayTypeAnnotations(type, path);
+          lowerArrayTypeAnnotations((ArrayTy) type, path);
           break;
         case WILD_TY:
           lowerWildTyTypeAnnotations((WildTy) type, path);
@@ -903,19 +902,9 @@ public class Lower {
       }
     }
 
-    private void lowerArrayTypeAnnotations(Type type, TypePath path) {
-      Type base = type;
-      Deque<ArrayTy> flat = new ArrayDeque<>();
-      while (base instanceof ArrayTy) {
-        ArrayTy arrayTy = (ArrayTy) base;
-        flat.addFirst(arrayTy);
-        base = arrayTy.elementType();
-      }
-      for (ArrayTy arrayTy : flat) {
-        lowerTypeAnnotations(arrayTy.annos(), path);
-        path = path.array();
-      }
-      lowerTypeAnnotations(base, path);
+    private void lowerArrayTypeAnnotations(ArrayTy type, TypePath path) {
+      lowerTypeAnnotations(type.annos(), path);
+      lowerTypeAnnotations(type.elementType(), path.array());
     }
 
     private void lowerClassTypeTypeAnnotations(ClassTy type, TypePath path) {

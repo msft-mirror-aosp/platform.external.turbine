@@ -29,7 +29,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Optional;
 import java.util.Set;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** An AST node. */
 public abstract class Tree {
@@ -856,6 +856,7 @@ public abstract class Tree {
     public Optional<Tree> defaultValue() {
       return defaultValue;
     }
+
     /**
      * A javadoc comment, excluding the opening and closing delimiters but including all interior
      * characters and whitespace.
@@ -1017,6 +1018,7 @@ public abstract class Tree {
     public TurbineTyKind tykind() {
       return tykind;
     }
+
     /**
      * A javadoc comment, excluding the opening and closing delimiters but including all interior
      * characters and whitespace.

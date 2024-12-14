@@ -18,7 +18,7 @@ package com.google.turbine.parse;
 
 import com.google.common.base.Function;
 import com.google.common.collect.Lists;
-import com.google.common.escape.SourceCodeEscapers;
+import com.google.turbine.escape.SourceCodeEscapers;
 import com.sun.tools.javac.parser.Scanner;
 import com.sun.tools.javac.parser.ScannerFactory;
 import com.sun.tools.javac.parser.Tokens;
@@ -32,7 +32,7 @@ public final class JavacLexer {
   static List<String> javacLex(final String input) {
     Context context = new Context();
     Scanner scanner =
-        ScannerFactory.instance(context).newScanner(input, /*keepDocComments=*/ false);
+        ScannerFactory.instance(context).newScanner(input, /* keepDocComments= */ false);
     List<Tokens.Token> tokens = new ArrayList<>();
     do {
       scanner.nextToken();
@@ -280,8 +280,9 @@ public final class JavacLexer {
       case CHARLITERAL:
         return String.format(
             "CHAR_LITERAL(%s)", SourceCodeEscapers.javaCharEscaper().escape(token.stringVal()));
+      default:
+        throw new AssertionError("Unknown token kind: " + token.kind);
     }
-    return token.kind.toString();
   }
 
   private JavacLexer() {}
