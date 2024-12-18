@@ -44,6 +44,7 @@ java_library_host {
     static_libs: [
         "error_prone_annotations",
         "guava",
+        "jspecify",
     ],
 
     plugins: ["auto_value_plugin"],

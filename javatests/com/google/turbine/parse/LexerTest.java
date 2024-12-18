@@ -17,11 +17,10 @@
 package com.google.turbine.parse;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assume.assumeTrue;
 
-import com.google.common.escape.SourceCodeEscapers;
 import com.google.common.truth.Expect;
 import com.google.turbine.diag.SourceFile;
+import com.google.turbine.escape.SourceCodeEscapers;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -383,7 +382,6 @@ public class LexerTest {
 
   @Test
   public void stripIndent() throws Exception {
-    assumeTrue(Runtime.version().feature() >= 13);
     String[] inputs = {
       "",
       "hello",
@@ -400,5 +398,26 @@ public class LexerTest {
     for (String input : inputs) {
       expect.that(StreamLexer.stripIndent(input)).isEqualTo(stripIndent.invoke(input));
     }
+  }
+
+  @Test
+  public void textBlockNewlineEscapes() throws Exception {
+    String input =
+        "\"\"\"\n" //
+            + "hello\\\n"
+            + "hello\\\r"
+            + "hello\\\r\n"
+            + "\"\"\"";
+    lexerComparisonTest(input);
+    assertThat(lex(input)).containsExactly("STRING_LITERAL(hellohellohello)", "EOF");
+  }
+
+  // Check for EOF when skipping over escapes in text blocks
+  @Test
+  public void textBlockEOF() {
+    String input = "\"\"\"\n\\";
+    Lexer lexer = new StreamLexer(new UnicodeEscapePreprocessor(new SourceFile(null, input)));
+    assertThat(lexer.next()).isEqualTo(Token.EOF);
+    assertThat(lexer.stringValue()).isEqualTo("\\");
   }
 }

@@ -29,22 +29,19 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest ]
-        java: [ 19, 17, 11.0.16 ]
+        java: [ 21, 17 ]
         experimental: [ false ]
         include:
           # Only test on macos and windows with a single recent JDK to avoid a
           # combinatorial explosion of test configurations.
           - os: macos-latest
-            java: 19
+            java: 21
             experimental: false
           - os: windows-latest
-            java: 19
+            java: 21
             experimental: false
           - os: ubuntu-latest
-            java: 20-ea
-            experimental: true
-          - os: ubuntu-latest
-            java: 21-ea
+            java: EA
             experimental: true
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.experimental }}
@@ -55,7 +52,15 @@ jobs:
           access_token: ${{ github.token }}
       - name: 'Check out repository'
         uses: actions/checkout@v2
+      - name: 'Set up JDK ${{ matrix.java }} from jdk.java.net'
+        if: ${{ matrix.java == 'EA' }}
+        uses: oracle-actions/setup-java@v1
+        with:
+          website: jdk.java.net
+          release: ${{ matrix.java }}
+          cache: 'maven'
       - name: 'Set up JDK ${{ matrix.java }}'
+        if: ${{ matrix.java != 'EA' }}
         uses: actions/setup-java@v2
         with:
           java-version: ${{ matrix.java }}
