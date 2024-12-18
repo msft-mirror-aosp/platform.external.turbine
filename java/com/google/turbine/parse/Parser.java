@@ -60,12 +60,10 @@ import com.google.turbine.tree.Tree.Type;
 import com.google.turbine.tree.Tree.VarDecl;
 import com.google.turbine.tree.Tree.WildTy;
 import com.google.turbine.tree.TurbineModifier;
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A parser for the subset of Java required for header compilation.
@@ -212,7 +210,11 @@ public class Parser {
                 && (ident.value().equals("module") || ident.value().equals("open"))) {
               boolean open = false;
               if (ident.value().equals("open")) {
-                ident = eatIdent();
+                next();
+                if (token != IDENT) {
+                  throw error(token);
+                }
+                ident = ident();
                 open = true;
               }
               if (!ident.value().equals("module")) {
@@ -462,12 +464,12 @@ public class Parser {
       if (token == Token.IDENT && lexer.stringValue().equals("transitive")) {
         next();
         access.add(TurbineModifier.TRANSITIVE);
-        break;
+        continue;
       }
       if (token == Token.STATIC) {
         next();
         access.add(TurbineModifier.STATIC);
-        break;
+        continue;
       }
       break;
     }
@@ -552,15 +554,17 @@ public class Parser {
             if (token == Token.LPAREN) {
               dropParens();
             }
+            EnumSet<TurbineModifier> access = EnumSet.copyOf(ENUM_CONSTANT_MODIFIERS);
             // TODO(cushon): consider desugaring enum constants later
             if (token == Token.LBRACE) {
               dropBlocks();
+              access.add(TurbineModifier.ENUM_IMPL);
             }
             maybe(Token.COMMA);
             result.add(
                 new VarDecl(
                     position,
-                    ENUM_CONSTANT_MODIFIERS,
+                    access,
                     annos.build(),
                     new ClassTy(
                         position,
@@ -894,14 +898,12 @@ public class Parser {
                   ident,
                   ImmutableList.<Type>of(),
                   ImmutableList.of());
-          result = maybeDims(maybeAnnos(), result);
           break;
         }
       case LT:
         {
           result =
               new ClassTy(position, Optional.<ClassTy>empty(), ident, tyargs(), ImmutableList.of());
-          result = maybeDims(maybeAnnos(), result);
           break;
         }
       case DOT:
@@ -927,7 +929,7 @@ public class Parser {
       }
       result = classty((ClassTy) result);
     }
-    result = maybeDims(maybeAnnos(), result);
+    result = maybeDims(result);
     pos = position;
     name = eatIdent();
     switch (token) {
@@ -1101,34 +1103,7 @@ public class Parser {
    * int [] @A [] x}, not {@code int @A [] [] x}.
    */
   private Type extraDims(Type ty) {
-    ImmutableList<Anno> annos = maybeAnnos();
-    if (!annos.isEmpty() && token != Token.LBRACK) {
-      // orphaned type annotations
-      throw error(token);
-    }
-    Deque<ImmutableList<Anno>> extra = new ArrayDeque<>();
-    while (maybe(Token.LBRACK)) {
-      eat(Token.RBRACK);
-      extra.push(annos);
-      annos = maybeAnnos();
-    }
-    ty = extraDims(ty, extra);
-    return ty;
-  }
-
-  private Type extraDims(Type type, Deque<ImmutableList<Anno>> extra) {
-    if (extra.isEmpty()) {
-      return type;
-    }
-    if (type == null) {
-      // trailing dims without a type, e.g. for a constructor declaration
-      throw error(token);
-    }
-    if (type.kind() == Kind.ARR_TY) {
-      ArrTy arrTy = (ArrTy) type;
-      return new ArrTy(arrTy.position(), arrTy.annos(), extraDims(arrTy.elem(), extra));
-    }
-    return new ArrTy(type.position(), extra.pop(), extraDims(type, extra));
+    return maybeDims(ty);
   }
 
   private ImmutableList<ClassTy> exceptions() {
@@ -1159,29 +1134,7 @@ public class Parser {
     ImmutableList.Builder<Anno> annos = ImmutableList.builder();
     EnumSet<TurbineModifier> access = modifiersAndAnnotations(annos);
     Type ty = referenceTypeWithoutDims(ImmutableList.of());
-    ImmutableList<Anno> typeAnnos = maybeAnnos();
-    OUTER:
-    while (true) {
-      switch (token) {
-        case LBRACK:
-          next();
-          eat(Token.RBRACK);
-          ty = new ArrTy(position, typeAnnos, ty);
-          typeAnnos = maybeAnnos();
-          break;
-        case ELLIPSIS:
-          next();
-          access.add(VARARGS);
-          ty = new ArrTy(position, typeAnnos, ty);
-          typeAnnos = ImmutableList.of();
-          break OUTER;
-        default:
-          break OUTER;
-      }
-    }
-    if (!typeAnnos.isEmpty()) {
-      throw error(token);
-    }
+    ty = paramDims(access, ty);
     // the parameter name is `this` for receiver parameters, and a qualified this expression
     // for inner classes
     Ident name = identOrThis();
@@ -1193,6 +1146,25 @@ public class Parser {
     ty = extraDims(ty);
     return new VarDecl(
         position, access, annos.build(), ty, name, Optional.<Expression>empty(), null);
+  }
+
+  private Type paramDims(EnumSet<TurbineModifier> access, Type ty) {
+    ImmutableList<Anno> typeAnnos = maybeAnnos();
+    switch (token) {
+      case LBRACK:
+        next();
+        eat(Token.RBRACK);
+        return new ArrTy(position, typeAnnos, paramDims(access, ty));
+      case ELLIPSIS:
+        next();
+        access.add(VARARGS);
+        return new ArrTy(position, typeAnnos, ty);
+      default:
+        if (!typeAnnos.isEmpty()) {
+          throw error(token);
+        }
+        return ty;
+    }
   }
 
   private Ident identOrThis() {
@@ -1415,14 +1387,17 @@ public class Parser {
 
   private Type referenceType(ImmutableList<Anno> typeAnnos) {
     Type ty = referenceTypeWithoutDims(typeAnnos);
-    return maybeDims(maybeAnnos(), ty);
+    return maybeDims(ty);
   }
 
-  private Type maybeDims(ImmutableList<Anno> typeAnnos, Type ty) {
-    while (maybe(Token.LBRACK)) {
+  private Type maybeDims(Type ty) {
+    ImmutableList<Anno> typeAnnos = maybeAnnos();
+    if (maybe(Token.LBRACK)) {
       eat(Token.RBRACK);
-      ty = new ArrTy(position, typeAnnos, ty);
-      typeAnnos = maybeAnnos();
+      return new ArrTy(position, typeAnnos, maybeDims(ty));
+    }
+    if (!typeAnnos.isEmpty()) {
+      throw error(token);
     }
     return ty;
   }

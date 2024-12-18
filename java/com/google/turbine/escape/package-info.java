@@ -15,5 +15,5 @@
  */
 
 @com.google.errorprone.annotations.CheckReturnValue
-@org.jspecify.nullness.NullMarked
-package com.google.common.escape;
+@org.jspecify.annotations.NullMarked
+package com.google.turbine.escape;

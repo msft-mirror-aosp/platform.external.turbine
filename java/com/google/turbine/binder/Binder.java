@@ -69,7 +69,7 @@ import com.google.turbine.type.Type;
 import java.time.Duration;
 import java.util.Optional;
 import javax.annotation.processing.Processor;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** The entry point for analysis. */
 public final class Binder {
@@ -91,6 +91,19 @@ public final class Binder {
       ClassPath bootclasspath,
       Optional<String> moduleVersion) {
     TurbineLog log = new TurbineLog();
+    BindingResult br = bind(log, units, classpath, processorInfo, bootclasspath, moduleVersion);
+    log.maybeThrow();
+    return br;
+  }
+
+  /** Binds symbols and types to the given compilation units. */
+  public static @Nullable BindingResult bind(
+      TurbineLog log,
+      ImmutableList<CompUnit> units,
+      ClassPath classpath,
+      ProcessorInfo processorInfo,
+      ClassPath bootclasspath,
+      Optional<String> moduleVersion) {
     BindingResult br;
     try {
       br =
@@ -114,7 +127,6 @@ public final class Binder {
               .addAll(turbineError.diagnostics())
               .build());
     }
-    log.maybeThrow();
     return br;
   }
 
@@ -158,6 +170,8 @@ public final class Binder {
             syms,
             henv,
             CompoundEnv.<ClassSymbol, HeaderBoundClass>of(classPathEnv).append(henv));
+
+    tenv = PermitsBinder.bindPermits(syms, tenv);
 
     tenv =
         constants(

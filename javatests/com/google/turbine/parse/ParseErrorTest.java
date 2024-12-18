@@ -240,9 +240,9 @@ public class ParseErrorTest {
         .hasMessageThat()
         .isEqualTo(
             lines(
-                "<>:1: error: unexpected token: <", //
+                "<>:1: error: expected token <identifier>", //
                 "enum\te{p;ullt[].<~>>>L\0",
-                "                ^"));
+                "               ^"));
   }
 
   @Test
@@ -331,6 +331,164 @@ public class ParseErrorTest {
                 "<>:1: error: unexpected token: ;",
                 "@interface A { A value() default @Integer.class; }",
                 "                                               ^"));
+  }
+
+  @Test
+  public void textBlockNoTerminator() {
+    String input =
+        lines(
+            "class T {", //
+            "  String a = \"\"\"\"\"\";",
+            "}");
+    TurbineError e = assertThrows(TurbineError.class, () -> Parser.parse(input));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            lines(
+                "<>:2: error: unexpected input: \"",
+                "  String a = \"\"\"\"\"\";",
+                "                ^"));
+  }
+
+  @Test
+  public void textBlockNoTerminatorSpace() {
+    String input =
+        lines(
+            "class T {", //
+            "  String a = \"\"\" \"\"\";",
+            "}");
+    TurbineError e = assertThrows(TurbineError.class, () -> Parser.parse(input));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            lines(
+                "<>:2: error: unexpected input: \"",
+                "  String a = \"\"\" \"\"\";",
+                "                 ^"));
+  }
+
+  @Test
+  public void textBlockUnclosed() {
+    String input =
+        lines(
+            "class T {", //
+            "  String a = \"\"\"",
+            "             \"",
+            "}");
+    TurbineError e = assertThrows(TurbineError.class, () -> Parser.parse(input));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            lines(
+                "<>:2: error: unterminated expression, expected ';' not found",
+                "  String a = \"\"\"",
+                "             ^"));
+  }
+
+  @Test
+  public void textBlockUnescapedBackslash() {
+    String input =
+        lines(
+            "class T {", //
+            "  String a = \"\"\"",
+            "             abc \\ def",
+            "             \"\"\";",
+            "}");
+    TurbineError e = assertThrows(TurbineError.class, () -> Parser.parse(input));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            lines(
+                "<>:4: error: unexpected input:  ", //
+                "             \"\"\";",
+                "                ^"));
+  }
+
+  // Newline escapes are only allowed in text blocks
+  @Test
+  public void sEscape() {
+    String input =
+        lines(
+            "class T {", //
+            "  String a = \"\\\n" //
+                + "             \";",
+            "}");
+    TurbineError e = assertThrows(TurbineError.class, () -> Parser.parse(input));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            lines(
+                "<>:2: error: unexpected input: \n", //
+                "  String a = \"\\",
+                "               ^"));
+  }
+
+  @Test
+  public void sEscape_windowsLineEnding() {
+    String input =
+        lines(
+            "class T {", //
+            "  String a = \"\\\r\n" //
+                + "             \";",
+            "}");
+    TurbineError e = assertThrows(TurbineError.class, () -> Parser.parse(input));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            lines(
+                "<>:2: error: unexpected input: \r", //
+                "  String a = \"\\",
+                "               ^"));
+  }
+
+  @Test
+  public void typeAnnotationAfterDims() {
+    String input =
+        lines(
+            "class T {", //
+            "  int[] @A a;",
+            "}");
+    TurbineError e = assertThrows(TurbineError.class, () -> Parser.parse(input));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            lines(
+                "<>:2: error: unexpected identifier 'a'", //
+                "  int[] @A a;",
+                "           ^"));
+  }
+
+  @Test
+  public void typeAnnotationBeforeParam() {
+    String input =
+        lines(
+            "class T {", //
+            "  void f(int @A a) {}",
+            "}");
+    TurbineError e = assertThrows(TurbineError.class, () -> Parser.parse(input));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            lines(
+                "<>:2: error: unexpected identifier 'a'", //
+                "  void f(int @A a) {}",
+                "                ^"));
+  }
+
+  @Test
+  public void moduleInfoOpen() {
+    String input =
+        lines(
+            "open {", //
+            "}");
+    TurbineError e = assertThrows(TurbineError.class, () -> Parser.parse(input));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            lines(
+                "<>:1: error: unexpected token: {", //
+                "open {",
+                "     ^"));
   }
 
   private static String lines(String... lines) {

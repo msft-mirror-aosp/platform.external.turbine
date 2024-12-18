@@ -47,6 +47,10 @@ public class ModuleIntegrationTest {
       "module-info.test", //
       "classpath.test",
       "multimodule.test",
+      "module-info-for-base.test",
+      "module-info-open.test",
+      "module-requires-static-transitive.test",
+      "module-requires-transitive-static.test",
     };
     return ImmutableList.copyOf(testCases).stream().map(x -> new Object[] {x}).collect(toList());
   }
@@ -61,11 +65,6 @@ public class ModuleIntegrationTest {
 
   @Test
   public void test() throws Exception {
-    if (Double.parseDouble(JAVA_CLASS_VERSION.value()) < 53) {
-      // only run on JDK 9 and later
-      return;
-    }
-
     IntegrationTestSupport.TestInput input =
         IntegrationTestSupport.TestInput.parse(getResource(getClass(), "moduletestdata/" + test));
 

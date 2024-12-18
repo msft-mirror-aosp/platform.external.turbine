@@ -32,14 +32,13 @@ import com.google.turbine.type.AnnoInfo;
 import com.google.turbine.type.Type;
 import com.google.turbine.type.Type.IntersectionTy;
 import com.google.turbine.type.Type.MethodTy;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** A bound node that augments {@link HeaderBoundClass} with type information. */
 public interface TypeBoundClass extends HeaderBoundClass {
 
   /** The super-class type. */
-  @Nullable
-  Type superClassType();
+  @Nullable Type superClassType();
 
   /** Implemented interface types. */
   ImmutableList<Type> interfaceTypes();
@@ -62,8 +61,7 @@ public interface TypeBoundClass extends HeaderBoundClass {
    * Annotation metadata, e.g. from {@link java.lang.annotation.Target}, {@link
    * java.lang.annotation.Retention}, and {@link java.lang.annotation.Repeatable}.
    */
-  @Nullable
-  AnnotationMetadata annotationMetadata();
+  @Nullable AnnotationMetadata annotationMetadata();
 
   /** Declaration annotations. */
   ImmutableList<AnnoInfo> annotations();

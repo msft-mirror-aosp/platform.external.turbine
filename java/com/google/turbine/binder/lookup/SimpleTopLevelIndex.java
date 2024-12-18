@@ -16,14 +16,15 @@
 
 package com.google.turbine.binder.lookup;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.turbine.binder.sym.ClassSymbol;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * An index of canonical type names where all members are known statically.
@@ -37,17 +38,20 @@ public class SimpleTopLevelIndex implements TopLevelIndex {
   public static class Node {
 
     public @Nullable Node lookup(String bit) {
-      return children.get(bit);
+      return (children == null) ? null : children.get(bit);
     }
 
     private final @Nullable ClassSymbol sym;
-
-    // TODO(cushon): the set of children is typically going to be small, consider optimizing this
-    // to use a denser representation where appropriate.
-    private final Map<String, Node> children = new HashMap<>();
+    private final @Nullable HashMap<String, Node> children;
 
     Node(@Nullable ClassSymbol sym) {
-      this.sym = sym;
+      if (sym == null) {
+        this.sym = null;
+        this.children = new HashMap<>();
+      } else {
+        this.sym = sym;
+        this.children = null;
+      }
     }
 
     /**
@@ -57,6 +61,7 @@ public class SimpleTopLevelIndex implements TopLevelIndex {
      * @return {@code null} if an existing symbol with the same name has already been inserted.
      */
     private @Nullable Node insert(String name, @Nullable ClassSymbol sym) {
+      checkNotNull(children, "Cannot insert child into a class node '%s'", this.sym);
       Node child = children.get(name);
       if (child != null) {
         if (child.sym != null) {
@@ -72,6 +77,10 @@ public class SimpleTopLevelIndex implements TopLevelIndex {
 
   /** A builder for {@link TopLevelIndex}es. */
   public static class Builder {
+
+    // If there are a lot of strings, we'll skip the first few map sizes. If not, 1K of memory
+    // isn't significant.
+    private final StringCache stringCache = new StringCache(1024);
 
     public TopLevelIndex build() {
       // Freeze the index. The immutability of nodes is enforced by making insert private, doing
@@ -89,7 +98,7 @@ public class SimpleTopLevelIndex implements TopLevelIndex {
       int end = binaryName.indexOf('/');
       Node curr = root;
       while (end != -1) {
-        String simpleName = binaryName.substring(start, end);
+        String simpleName = stringCache.getSubstring(binaryName, start, end);
         curr = curr.insert(simpleName, null);
         // If we've already inserted something with the current name (either a package or another
         // symbol), bail out. When inserting elements from the classpath, this results in the
@@ -100,12 +109,12 @@ public class SimpleTopLevelIndex implements TopLevelIndex {
         start = end + 1;
         end = binaryName.indexOf('/', start);
       }
+      // Classname strings are probably unique so not worth caching.
       String simpleName = binaryName.substring(start);
       curr = curr.insert(simpleName, sym);
       if (curr == null || !Objects.equals(curr.sym, sym)) {
         return;
       }
-      return;
     }
   }
 
@@ -191,6 +200,10 @@ public class SimpleTopLevelIndex implements TopLevelIndex {
             new Supplier<ImmutableList<ClassSymbol>>() {
               @Override
               public ImmutableList<ClassSymbol> get() {
+                if (node.children == null) {
+                  return ImmutableList.of();
+                }
+
                 ImmutableList.Builder<ClassSymbol> result = ImmutableList.builder();
                 for (Node child : node.children.values()) {
                   if (child.sym != null) {
