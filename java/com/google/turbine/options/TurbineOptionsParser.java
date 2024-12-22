@@ -18,8 +18,6 @@ package com.google.turbine.options;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-import com.google.common.base.CharMatcher;
-import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.turbine.options.TurbineOptions.ReducedClasspathMode;
 import java.io.IOException;
@@ -150,6 +148,10 @@ public final class TurbineOptionsParser {
           // accepted (and ignored) for compatibility with JavaBuilder command lines
           readOne(next, argumentDeque);
           break;
+        case "--post_processor":
+          // accepted (and ignored) for compatibility with JavaBuilder command lines
+          ImmutableList<String> unused = readList(argumentDeque);
+          break;
         case "--compress_jar":
           // accepted (and ignored) for compatibility with JavaBuilder command lines
           break;
@@ -158,9 +160,6 @@ public final class TurbineOptionsParser {
       }
     }
   }
-
-  private static final Splitter ARG_SPLITTER =
-      Splitter.on(CharMatcher.breakingWhitespace()).omitEmptyStrings().trimResults();
 
   /**
    * Pre-processes an argument list, expanding arguments of the form {@code @filename} by reading
@@ -186,7 +185,7 @@ public final class TurbineOptionsParser {
         if (!Files.exists(paramsPath)) {
           throw new AssertionError("params file does not exist: " + paramsPath);
         }
-        expandParamsFiles(argumentDeque, ARG_SPLITTER.split(Files.readString(paramsPath)));
+        expandParamsFiles(argumentDeque, Files.readAllLines(paramsPath));
       } else {
         argumentDeque.addLast(arg);
       }

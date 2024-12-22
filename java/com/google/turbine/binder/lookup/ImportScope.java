@@ -18,7 +18,7 @@ package com.google.turbine.binder.lookup;
 
 import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.tree.Tree;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A scope for imports. Non-canonical imports depend on hierarchy analysis, so to break the cycle we
@@ -31,15 +31,14 @@ public interface ImportScope {
    * A function that performs non-canonical resolution, see {@link
    * com.google.turbine.binder.Resolve#resolve}.
    */
-  @FunctionalInterface
   interface ResolveFunction {
-    @Nullable
-    ClassSymbol resolveOne(ClassSymbol base, Tree.Ident name);
+    @Nullable ClassSymbol resolveOne(ClassSymbol base, Tree.Ident name);
+
+    boolean visible(ClassSymbol sym);
   }
 
   /** See {@link Scope#lookup(LookupKey)}. */
-  @Nullable
-  LookupResult lookup(LookupKey lookupKey, ResolveFunction resolve);
+  @Nullable LookupResult lookup(LookupKey lookupKey, ResolveFunction resolve);
 
   /** Adds a scope to the chain, in the manner of {@link CompoundScope#append(Scope)}. */
   default ImportScope append(ImportScope next) {

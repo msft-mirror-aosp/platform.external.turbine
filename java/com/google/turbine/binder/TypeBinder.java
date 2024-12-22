@@ -68,7 +68,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** Type binding. */
 public class TypeBinder {
@@ -235,10 +235,15 @@ public class TypeBinder {
     ImmutableList.Builder<ClassSymbol> permits = ImmutableList.builder();
     for (Tree.ClassTy i : base.decl().permits()) {
       Type type = bindClassTy(bindingScope, i);
-      if (!type.tyKind().equals(Type.TyKind.CLASS_TY)) {
-        throw new AssertionError(type.tyKind());
+      switch (type.tyKind()) {
+        case ERROR_TY:
+          continue;
+        case CLASS_TY:
+          permits.add(((Type.ClassTy) type).sym());
+          break;
+        default:
+          throw new AssertionError(type.tyKind());
       }
-      permits.add(((Type.ClassTy) type).sym());
     }
 
     CompoundScope scope =
@@ -297,6 +302,10 @@ public class TypeBinder {
     boolean hasEquals = false;
     boolean hasHashCode = false;
     boolean hasPrimaryConstructor = false;
+    Set<String> componentNamesToDeclare = new HashSet<>();
+    for (RecordComponentInfo c : components) {
+      componentNamesToDeclare.add(c.name());
+    }
     for (MethodInfo m : boundMethods) {
       if (m.name().equals("<init>")) {
         if (isPrimaryConstructor(m, components)) {
@@ -316,7 +325,10 @@ public class TypeBinder {
           case "hashCode":
             hasHashCode = m.parameters().isEmpty();
             break;
-          default: // fall out
+          default:
+            if (m.parameters().isEmpty()) {
+              componentNamesToDeclare.remove(m.name());
+            }
         }
         boundNonConstructors.add(m);
       }
@@ -378,6 +390,9 @@ public class TypeBinder {
               null));
     }
     for (RecordComponentInfo c : components) {
+      if (!componentNamesToDeclare.contains(c.name())) {
+        continue;
+      }
       MethodSymbol componentMethod = syntheticMethods.create(owner, c.name());
       methods.add(
           new MethodInfo(
@@ -956,7 +971,7 @@ public class TypeBinder {
     LookupResult result = scope.lookup(new LookupKey(names));
     if (result == null || result.sym() == null) {
       log.error(names.get(0).position(), ErrorKind.CANNOT_RESOLVE, Joiner.on('.').join(names));
-      return Type.ErrorTy.create(names);
+      return Type.ErrorTy.create(names, bindTyArgs(scope, t.tyargs()));
     }
     Symbol sym = result.sym();
     int annoIdx = flat.size() - result.remaining().size() - 1;
@@ -968,7 +983,7 @@ public class TypeBinder {
       case TY_PARAM:
         if (!result.remaining().isEmpty()) {
           log.error(t.position(), ErrorKind.TYPE_PARAMETER_QUALIFIER);
-          return Type.ErrorTy.create(names);
+          return Type.ErrorTy.create(names, ImmutableList.of());
         }
         return Type.TyVar.create((TyVarSymbol) sym, annos);
       default:
@@ -991,14 +1006,14 @@ public class TypeBinder {
     for (; idx < flat.size(); idx++) {
       Tree.ClassTy curr = flat.get(idx);
       ClassSymbol next = resolveNext(sym, curr.name());
+      ImmutableList<Type> targs = bindTyArgs(scope, curr.tyargs());
       if (next == null) {
-        return Type.ErrorTy.create(bits);
+        return Type.ErrorTy.create(bits, targs);
       }
       sym = next;
 
       annotations = bindAnnotations(scope, curr.annos());
-      classes.add(
-          Type.ClassTy.SimpleClassTy.create(sym, bindTyArgs(scope, curr.tyargs()), annotations));
+      classes.add(Type.ClassTy.SimpleClassTy.create(sym, targs, annotations));
     }
     return Type.ClassTy.create(classes.build());
   }

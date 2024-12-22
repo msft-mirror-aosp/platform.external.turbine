@@ -31,7 +31,7 @@ import com.google.turbine.tree.Tree;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** Qualified name resolution. */
 public final class Resolve {
@@ -101,6 +101,12 @@ public final class Resolve {
           return null;
         }
       }
+
+      @Override
+      public boolean visible(ClassSymbol sym) {
+        String packageName = origin != null ? origin.packageName() : null;
+        return importVisible(env, sym, packageName);
+      }
     };
   }
 
@@ -131,18 +137,23 @@ public final class Resolve {
 
     @Override
     public boolean visible(ClassSymbol sym) {
-      TurbineVisibility visibility = TurbineVisibility.fromAccess(env.getNonNull(sym).access());
-      switch (visibility) {
-        case PUBLIC:
-          return true;
-        case PROTECTED:
-        case PACKAGE:
-          return Objects.equals(sym.packageName(), packagename);
-        case PRIVATE:
-          return false;
-      }
-      throw new AssertionError(visibility);
+      return importVisible(env, sym, packagename);
     }
+  }
+
+  private static boolean importVisible(
+      Env<ClassSymbol, ? extends BoundClass> env, ClassSymbol sym, @Nullable String packagename) {
+    TurbineVisibility visibility = TurbineVisibility.fromAccess(env.getNonNull(sym).access());
+    switch (visibility) {
+      case PUBLIC:
+        return true;
+      case PROTECTED:
+      case PACKAGE:
+        return Objects.equals(sym.packageName(), packagename);
+      case PRIVATE:
+        return false;
+    }
+    throw new AssertionError(visibility);
   }
 
   /**

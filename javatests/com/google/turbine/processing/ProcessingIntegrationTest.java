@@ -19,15 +19,16 @@ package com.google.turbine.processing;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.MoreCollectors.onlyElement;
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth8.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.joining;
+import static javax.lang.model.util.ElementFilter.fieldsIn;
 import static javax.lang.model.util.ElementFilter.methodsIn;
 import static javax.lang.model.util.ElementFilter.typesIn;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assume.assumeTrue;
 
+import com.google.auto.common.MoreElements;
+import com.google.auto.common.MoreTypes;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
@@ -35,44 +36,60 @@ import com.google.common.collect.ImmutableMap;
 import com.google.turbine.binder.Binder;
 import com.google.turbine.binder.Binder.BindingResult;
 import com.google.turbine.binder.ClassPathBinder;
-import com.google.turbine.binder.Processing;
 import com.google.turbine.binder.Processing.ProcessorInfo;
+import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.diag.SourceFile;
 import com.google.turbine.diag.TurbineDiagnostic;
 import com.google.turbine.diag.TurbineError;
+import com.google.turbine.diag.TurbineLog;
 import com.google.turbine.lower.IntegrationTestSupport;
 import com.google.turbine.parse.Parser;
 import com.google.turbine.testing.TestClassPaths;
 import com.google.turbine.tree.Tree;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.RecordComponentElement;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.ErrorType;
 import javax.lang.model.type.ExecutableType;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic;
 import javax.tools.FileObject;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class ProcessingIntegrationTest {
+
+  @Rule public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
   @SupportedAnnotationTypes("*")
   public static class CrashingProcessor extends AbstractProcessor {
@@ -96,20 +113,7 @@ public class ProcessingIntegrationTest {
             "@Deprecated",
             "class Test extends NoSuch {",
             "}");
-    TurbineError e =
-        assertThrows(
-            TurbineError.class,
-            () ->
-                Binder.bind(
-                    units,
-                    ClassPathBinder.bindClasspath(ImmutableList.of()),
-                    Processing.ProcessorInfo.create(
-                        ImmutableList.of(new CrashingProcessor()),
-                        getClass().getClassLoader(),
-                        ImmutableMap.of(),
-                        SourceVersion.latestSupported()),
-                    TestClassPaths.TURBINE_BOOTCLASSPATH,
-                    Optional.empty()));
+    TurbineError e = runProcessors(units, new CrashingProcessor());
     ImmutableList<String> messages =
         e.diagnostics().stream().map(TurbineDiagnostic::message).collect(toImmutableList());
     assertThat(messages).hasSize(2);
@@ -156,20 +160,7 @@ public class ProcessingIntegrationTest {
             "@Deprecated",
             "class Test {",
             "}");
-    TurbineError e =
-        assertThrows(
-            TurbineError.class,
-            () ->
-                Binder.bind(
-                    units,
-                    ClassPathBinder.bindClasspath(ImmutableList.of()),
-                    Processing.ProcessorInfo.create(
-                        ImmutableList.of(new WarningProcessor()),
-                        getClass().getClassLoader(),
-                        ImmutableMap.of(),
-                        SourceVersion.latestSupported()),
-                    TestClassPaths.TURBINE_BOOTCLASSPATH,
-                    Optional.empty()));
+    TurbineError e = runProcessors(units, new WarningProcessor());
     ImmutableList<String> diags =
         e.diagnostics().stream().map(d -> d.message()).collect(toImmutableList());
     assertThat(diags).hasSize(2);
@@ -399,20 +390,7 @@ public class ProcessingIntegrationTest {
             "@Deprecated",
             "class Test {",
             "}");
-    TurbineError e =
-        assertThrows(
-            TurbineError.class,
-            () ->
-                Binder.bind(
-                    units,
-                    ClassPathBinder.bindClasspath(ImmutableList.of()),
-                    Processing.ProcessorInfo.create(
-                        ImmutableList.of(new ErrorProcessor(), new FinalRoundErrorProcessor()),
-                        getClass().getClassLoader(),
-                        ImmutableMap.of(),
-                        SourceVersion.latestSupported()),
-                    TestClassPaths.TURBINE_BOOTCLASSPATH,
-                    Optional.empty()));
+    TurbineError e = runProcessors(units, new ErrorProcessor(), new FinalRoundErrorProcessor());
     ImmutableList<String> diags =
         e.diagnostics().stream().map(d -> d.message()).collect(toImmutableList());
     assertThat(diags)
@@ -452,20 +430,7 @@ public class ProcessingIntegrationTest {
             "@Deprecated",
             "class T extends S {",
             "}");
-    TurbineError e =
-        assertThrows(
-            TurbineError.class,
-            () ->
-                Binder.bind(
-                    units,
-                    ClassPathBinder.bindClasspath(ImmutableList.of()),
-                    Processing.ProcessorInfo.create(
-                        ImmutableList.of(new SuperTypeProcessor()),
-                        getClass().getClassLoader(),
-                        ImmutableMap.of(),
-                        SourceVersion.latestSupported()),
-                    TestClassPaths.TURBINE_BOOTCLASSPATH,
-                    Optional.empty()));
+    TurbineError e = runProcessors(units, new SuperTypeProcessor());
     ImmutableList<String> diags =
         e.diagnostics().stream().map(d -> d.message()).collect(toImmutableList());
     assertThat(diags).containsExactly("could not resolve S", "S [S]").inOrder();
@@ -547,20 +512,7 @@ public class ProcessingIntegrationTest {
             "=== T.java ===", //
             "class T extends G.I {",
             "}");
-    TurbineError e =
-        assertThrows(
-            TurbineError.class,
-            () ->
-                Binder.bind(
-                    units,
-                    ClassPathBinder.bindClasspath(ImmutableList.of()),
-                    ProcessorInfo.create(
-                        ImmutableList.of(new GenerateQualifiedProcessor()),
-                        getClass().getClassLoader(),
-                        ImmutableMap.of(),
-                        SourceVersion.latestSupported()),
-                    TestClassPaths.TURBINE_BOOTCLASSPATH,
-                    Optional.empty()));
+    TurbineError e = runProcessors(units, new GenerateQualifiedProcessor());
     assertThat(
             e.diagnostics().stream()
                 .filter(d -> d.severity().equals(Diagnostic.Kind.NOTE))
@@ -598,20 +550,7 @@ public class ProcessingIntegrationTest {
         parseUnit(
             "=== T.java ===", //
             "@Deprecated(noSuch = 42) class T {}");
-    TurbineError e =
-        assertThrows(
-            TurbineError.class,
-            () ->
-                Binder.bind(
-                    units,
-                    ClassPathBinder.bindClasspath(ImmutableList.of()),
-                    ProcessorInfo.create(
-                        ImmutableList.of(new ElementValueInspector()),
-                        getClass().getClassLoader(),
-                        ImmutableMap.of(),
-                        SourceVersion.latestSupported()),
-                    TestClassPaths.TURBINE_BOOTCLASSPATH,
-                    Optional.empty()));
+    TurbineError e = runProcessors(units, new ElementValueInspector());
     assertThat(
             e.diagnostics().stream()
                 .filter(d -> d.severity().equals(Diagnostic.Kind.ERROR))
@@ -649,25 +588,11 @@ public class ProcessingIntegrationTest {
 
   @Test
   public void recordProcessing() throws IOException {
-    assumeTrue(Runtime.version().feature() >= 15);
     ImmutableList<Tree.CompUnit> units =
         parseUnit(
             "=== R.java ===", //
             "record R<T>(@Deprecated T x, int... y) {}");
-    TurbineError e =
-        assertThrows(
-            TurbineError.class,
-            () ->
-                Binder.bind(
-                    units,
-                    ClassPathBinder.bindClasspath(ImmutableList.of()),
-                    ProcessorInfo.create(
-                        ImmutableList.of(new RecordProcessor()),
-                        getClass().getClassLoader(),
-                        ImmutableMap.of(),
-                        SourceVersion.latestSupported()),
-                    TestClassPaths.TURBINE_BOOTCLASSPATH,
-                    Optional.empty()));
+    TurbineError e = runProcessors(units, new RecordProcessor());
     assertThat(
             e.diagnostics().stream()
                 .filter(d -> d.severity().equals(Diagnostic.Kind.ERROR))
@@ -684,6 +609,77 @@ public class ProcessingIntegrationTest {
             "METHOD y()");
   }
 
+  @SupportedAnnotationTypes("*")
+  public static class RecordFromADistanceProcessor extends AbstractProcessor {
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+      return SourceVersion.latestSupported();
+    }
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+      processingEnv
+          .getMessager()
+          .printMessage(
+              Diagnostic.Kind.ERROR,
+              roundEnv
+                  .getElementsAnnotatedWith(processingEnv.getElementUtils().getTypeElement("foo.R"))
+                  .stream()
+                  .flatMap(e -> processingEnv.getElementUtils().getAllAnnotationMirrors(e).stream())
+                  .flatMap(a -> a.getElementValues().values().stream())
+                  .flatMap(
+                      x ->
+                          MoreElements.asType(
+                              MoreTypes.asDeclared((TypeMirror) x.getValue()).asElement())
+                              .getRecordComponents()
+                              .stream())
+                  .map(x -> x.getSimpleName())
+                  .collect(toImmutableList())
+                  .toString());
+      return false;
+    }
+  }
+
+  @Test
+  public void bytecodeRecord_componentsAvailable() throws IOException {
+    Map<String, byte[]> library =
+        IntegrationTestSupport.runTurbine(
+            ImmutableMap.of(
+                "MyRecord.java", "package foo; public record MyRecord(int x, int y) {}"),
+            ImmutableList.of());
+    Path libJar = temporaryFolder.newFile("lib.jar").toPath();
+    try (OutputStream os = Files.newOutputStream(libJar);
+        JarOutputStream jos = new JarOutputStream(os)) {
+      jos.putNextEntry(new JarEntry("foo/MyRecord.class"));
+      jos.write(requireNonNull(library.get("foo/MyRecord")));
+    }
+
+    ImmutableList<Tree.CompUnit> units =
+        parseUnit(
+            "=== Y.java ===", //
+            "package foo;",
+            "@interface R { Class<? extends Record> value(); }",
+            "@R(MyRecord.class)",
+            "class Y {}");
+
+    TurbineLog log = new TurbineLog();
+    BindingResult unused =
+        Binder.bind(
+            log,
+            units,
+            ClassPathBinder.bindClasspath(ImmutableList.of(libJar)),
+            ProcessorInfo.create(
+                ImmutableList.of(new RecordFromADistanceProcessor()),
+                getClass().getClassLoader(),
+                ImmutableMap.of(),
+                SourceVersion.latestSupported()),
+            TestClassPaths.TURBINE_BOOTCLASSPATH,
+            Optional.empty());
+    ImmutableList<String> messages =
+        log.diagnostics().stream().map(TurbineDiagnostic::message).collect(toImmutableList());
+    assertThat(messages).contains("[x, y]");
+  }
+
   @Test
   public void missingElementValue() {
     ImmutableList<Tree.CompUnit> units =
@@ -692,21 +688,11 @@ public class ProcessingIntegrationTest {
             "import java.lang.annotation.Retention;",
             "@Retention() @interface T {}");
     TurbineError e =
-        assertThrows(
-            TurbineError.class,
-            () ->
-                Binder.bind(
-                    units,
-                    ClassPathBinder.bindClasspath(ImmutableList.of()),
-                    ProcessorInfo.create(
-                        // missing annotation arguments are not a recoverable error, annotation
-                        // processing shouldn't happen
-                        ImmutableList.of(new CrashingProcessor()),
-                        getClass().getClassLoader(),
-                        ImmutableMap.of(),
-                        SourceVersion.latestSupported()),
-                    TestClassPaths.TURBINE_BOOTCLASSPATH,
-                    Optional.empty()));
+        runProcessors(
+            units,
+            // missing annotation arguments are not a recoverable error, annotation processing
+            // shouldn't happen
+            new CrashingProcessor());
     assertThat(e.diagnostics().stream().map(d -> d.message()))
         .containsExactly("missing required annotation argument: value");
   }
@@ -785,20 +771,7 @@ public class ProcessingIntegrationTest {
             "    return super.f(list);",
             "  }",
             "}");
-    TurbineError e =
-        assertThrows(
-            TurbineError.class,
-            () ->
-                Binder.bind(
-                    units,
-                    ClassPathBinder.bindClasspath(ImmutableList.of()),
-                    ProcessorInfo.create(
-                        ImmutableList.of(new AllMethodsProcessor()),
-                        getClass().getClassLoader(),
-                        ImmutableMap.of(),
-                        SourceVersion.latestSupported()),
-                    TestClassPaths.TURBINE_BOOTCLASSPATH,
-                    Optional.empty()));
+    TurbineError e = runProcessors(units, new AllMethodsProcessor());
     assertThat(e.diagnostics().stream().map(d -> d.message()))
         .containsExactly(
             "A#f<U>(java.util.List<U>)U <: B#f<U>(java.util.List<U>)U ? false",
@@ -844,24 +817,283 @@ public class ProcessingIntegrationTest {
         parseUnit(
             "=== T.java ===", //
             "class T {}");
-    TurbineError e =
-        assertThrows(
-            TurbineError.class,
-            () ->
-                Binder.bind(
-                    units,
-                    ClassPathBinder.bindClasspath(ImmutableList.of()),
-                    ProcessorInfo.create(
-                        ImmutableList.of(new URIProcessor()),
-                        getClass().getClassLoader(),
-                        ImmutableMap.of(),
-                        SourceVersion.latestSupported()),
-                    TestClassPaths.TURBINE_BOOTCLASSPATH,
-                    Optional.empty()));
+    TurbineError e = runProcessors(units, new URIProcessor());
     assertThat(
             e.diagnostics().stream()
                 .filter(d -> d.severity().equals(Diagnostic.Kind.ERROR))
                 .map(d -> d.message()))
         .containsExactly("file:///foo/Bar - " + Paths.get(URI.create("file:///foo/Bar")));
+  }
+
+  @SupportedAnnotationTypes("*")
+  public static class MethodAnnotationTypeKindProcessor extends AbstractProcessor {
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+      return SourceVersion.latestSupported();
+    }
+
+    boolean first = true;
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+      if (!first) {
+        return false;
+      }
+      first = false;
+      TypeElement e = processingEnv.getElementUtils().getTypeElement("T");
+      for (AnnotationMirror a : e.getAnnotationMirrors()) {
+        DeclaredType t = a.getAnnotationType();
+        processingEnv
+            .getMessager()
+            .printMessage(Diagnostic.Kind.NOTE, t + "(" + t.getKind() + ")", e);
+        // this shouldn't crash
+        requireNonNull(a.getAnnotationType().asElement().getEnclosedElements());
+      }
+      return false;
+    }
+  }
+
+  @Test
+  public void missingAnnotationType() throws IOException {
+    Map<String, byte[]> library =
+        IntegrationTestSupport.runTurbine(
+            ImmutableMap.of(
+                "A.java", //
+                "@interface A {}",
+                "T.java",
+                "@A class T {}"),
+            ImmutableList.of());
+    Path libJar = temporaryFolder.newFile("lib.jar").toPath();
+    try (OutputStream os = Files.newOutputStream(libJar);
+        JarOutputStream jos = new JarOutputStream(os)) {
+      // deliberately exclude the definition of the annotation
+      jos.putNextEntry(new JarEntry("T.class"));
+      jos.write(requireNonNull(library.get("T")));
+    }
+
+    ImmutableList<Tree.CompUnit> units =
+        parseUnit(
+            "=== Y.java ===", //
+            "class Y {}");
+
+    TurbineLog log = new TurbineLog();
+    BindingResult bound =
+        Binder.bind(
+            log,
+            units,
+            ClassPathBinder.bindClasspath(ImmutableList.of(libJar)),
+            ProcessorInfo.create(
+                ImmutableList.of(new MethodAnnotationTypeKindProcessor()),
+                getClass().getClassLoader(),
+                ImmutableMap.of(),
+                SourceVersion.latestSupported()),
+            TestClassPaths.TURBINE_BOOTCLASSPATH,
+            Optional.empty());
+    assertThat(bound.units().keySet()).containsExactly(new ClassSymbol("Y"));
+    ImmutableList<String> messages =
+        log.diagnostics().stream().map(TurbineDiagnostic::message).collect(toImmutableList());
+    assertThat(messages).containsExactly("A(ERROR)");
+  }
+
+  @SupportedAnnotationTypes("*")
+  public static class RecordComponentProcessor extends AbstractProcessor {
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+      return SourceVersion.latestSupported();
+    }
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+
+      ImmutableList<RecordComponentElement> components =
+          typesIn(roundEnv.getRootElements()).stream()
+              .flatMap(t -> t.getRecordComponents().stream())
+              .collect(toImmutableList());
+      for (RecordComponentElement c : components) {
+        processingEnv
+            .getMessager()
+            .printMessage(
+                Diagnostic.Kind.ERROR,
+                String.format(
+                    "enclosing: %s, name: %s, accessor: %s %s",
+                    c.getEnclosingElement(),
+                    c.getSimpleName(),
+                    c.getAccessor(),
+                    c.getAccessor().getAnnotationMirrors()));
+      }
+      return false;
+    }
+  }
+
+  @Test
+  public void recordComponents() {
+    ImmutableList<Tree.CompUnit> units =
+        parseUnit(
+            "=== C.java ===", //
+            "abstract class C {",
+            "  abstract int x();",
+            "  abstract int t();",
+            "}",
+            "=== R.java ===", //
+            "record R(int x, @Deprecated int y) {",
+            "}");
+    TurbineError e = runProcessors(units, new RecordComponentProcessor());
+    assertThat(e.diagnostics().stream().map(d -> d.message()))
+        .containsExactly(
+            "enclosing: R, name: x, accessor: x() []",
+            "enclosing: R, name: y, accessor: y() [@java.lang.Deprecated]");
+  }
+
+  @SupportedAnnotationTypes("*")
+  public static class ModifiersProcessor extends AbstractProcessor {
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+      return SourceVersion.latestSupported();
+    }
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+      for (Element e : roundEnv.getRootElements()) {
+        processingEnv
+            .getMessager()
+            .printMessage(Diagnostic.Kind.ERROR, String.format("%s %s", e, e.getModifiers()), e);
+      }
+      return false;
+    }
+  }
+
+  @Test
+  public void modifiers() {
+    ImmutableList<Tree.CompUnit> units =
+        parseUnit(
+            "=== I.java ===", //
+            "sealed interface I {}",
+            "non-sealed interface J {}");
+    TurbineError e = runProcessors(units, new ModifiersProcessor());
+    assertThat(e.diagnostics().stream().map(d -> d.message()))
+        .containsExactly("I [abstract, sealed]", "J [abstract, non-sealed]");
+  }
+
+  @SupportedAnnotationTypes("*")
+  public static class PermitsProcessor extends AbstractProcessor {
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+      return SourceVersion.latestSupported();
+    }
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+      for (TypeElement e : ElementFilter.typesIn(roundEnv.getRootElements())) {
+        processingEnv
+            .getMessager()
+            .printMessage(
+                Diagnostic.Kind.ERROR, String.format("%s %s", e, e.getPermittedSubclasses()), e);
+      }
+      return false;
+    }
+  }
+
+  @Test
+  public void permits() {
+    ImmutableList<Tree.CompUnit> units =
+        parseUnit(
+            "=== I.java ===", //
+            "interface I permits J, K {}",
+            "interface J {}",
+            "interface K {}");
+    TurbineError e1 = runProcessors(units, new PermitsProcessor());
+    TurbineError e = e1;
+    assertThat(e.diagnostics().stream().map(d -> d.message()))
+        .containsExactly("I [J, K]", "J []", "K []");
+  }
+
+  @SupportedAnnotationTypes("*")
+  public static class MissingParameterizedTypeProcessor extends AbstractProcessor {
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+      return SourceVersion.latestSupported();
+    }
+
+    private boolean first = true;
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+      if (!first) {
+        return false;
+      }
+      first = false;
+      for (Element root : roundEnv.getRootElements()) {
+        ErrorType superClass = (ErrorType) ((TypeElement) root).getSuperclass();
+        processingEnv
+            .getMessager()
+            .printMessage(
+                Diagnostic.Kind.ERROR,
+                String.format(
+                    "%s supertype: %s, arguments: %s, enclosing: %s",
+                    root,
+                    superClass,
+                    superClass.getTypeArguments(),
+                    superClass.getEnclosingType()));
+        for (Element field : fieldsIn(root.getEnclosedElements())) {
+          ErrorType type = (ErrorType) field.asType();
+          processingEnv
+              .getMessager()
+              .printMessage(
+                  Diagnostic.Kind.ERROR,
+                  String.format(
+                      "%s supertype: %s, arguments: %s, enclosing: %s",
+                      field, type, type.getTypeArguments(), type.getEnclosingType()));
+        }
+      }
+      return false;
+    }
+  }
+
+  @Test
+  public void missingParamterizedType() throws IOException {
+    ImmutableList<Tree.CompUnit> units =
+        parseUnit(
+            "=== T.java ===", //
+            """
+            class T extends M<N> {
+              A a;
+              B<C, D> b;
+              B<C, D>.E<F> c;
+            }
+            """);
+    TurbineError e = runProcessors(units, new MissingParameterizedTypeProcessor());
+    assertThat(
+            e.diagnostics().stream()
+                .filter(d -> d.severity().equals(Diagnostic.Kind.ERROR))
+                .map(d -> d.message()))
+        .containsExactly(
+            "could not resolve M",
+            "could not resolve N",
+            "could not resolve A",
+            "could not resolve B",
+            "could not resolve B.E",
+            "could not resolve C",
+            "could not resolve D",
+            "could not resolve F",
+            "T supertype: M<N>, arguments: [N], enclosing: none",
+            "a supertype: A, arguments: [], enclosing: none",
+            "b supertype: B<C,D>, arguments: [C, D], enclosing: none",
+            "c supertype: B.E<F>, arguments: [F], enclosing: none");
+  }
+
+  private TurbineError runProcessors(ImmutableList<Tree.CompUnit> units, Processor... processors) {
+    return assertThrows(
+        TurbineError.class,
+        () ->
+            Binder.bind(
+                units,
+                ClassPathBinder.bindClasspath(ImmutableList.of()),
+                ProcessorInfo.create(
+                    ImmutableList.copyOf(processors),
+                    getClass().getClassLoader(),
+                    ImmutableMap.of(),
+                    SourceVersion.latestSupported()),
+                TestClassPaths.TURBINE_BOOTCLASSPATH,
+                Optional.empty()));
   }
 }

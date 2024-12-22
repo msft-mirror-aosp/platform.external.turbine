@@ -71,7 +71,7 @@ import javax.annotation.processing.Processor;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** Top level annotation processing logic, see also {@link Binder}. */
 public class Processing {
@@ -161,7 +161,7 @@ public class Processing {
         SupportedAnnotationTypes supportedAnnotationTypes = e.getValue();
         Set<TypeElement> annotations = new HashSet<>();
         boolean run = supportedAnnotationTypes.everything() || toRun.contains(processor);
-        for (ClassSymbol a : allAnnotations.keys()) {
+        for (ClassSymbol a : allAnnotations.keySet()) {
           if (supportedAnnotationTypes.everything()
               || supportedAnnotationTypes.pattern().matcher(a.toString()).matches()) {
             annotations.add(factory.typeElement(a));

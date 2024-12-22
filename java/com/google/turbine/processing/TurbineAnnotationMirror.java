@@ -45,7 +45,7 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.ErrorType;
 import javax.lang.model.type.TypeMirror;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * An implementation of {@link AnnotationMirror} and {@link AnnotationValue} backed by {@link
@@ -91,7 +91,8 @@ class TurbineAnnotationMirror implements TurbineAnnotationValueMirror, Annotatio
               public DeclaredType get() {
                 if (anno.sym() == null) {
                   return (ErrorType)
-                      factory.asTypeMirror(ErrorTy.create(getLast(anno.tree().name()).value()));
+                      factory.asTypeMirror(
+                          ErrorTy.create(getLast(anno.tree().name()).value(), ImmutableList.of()));
                 }
                 return (DeclaredType) factory.typeElement(anno.sym()).asType();
               }

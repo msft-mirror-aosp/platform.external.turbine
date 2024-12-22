@@ -58,7 +58,7 @@ import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.TypeVariable;
 import javax.lang.model.type.TypeVisitor;
 import javax.lang.model.type.WildcardType;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** A {@link TypeMirror} implementation backed by a {@link Type}. */
 public abstract class TurbineTypeMirror implements TypeMirror {
@@ -338,7 +338,7 @@ public abstract class TurbineTypeMirror implements TypeMirror {
 
     @Override
     public List<? extends TypeMirror> getTypeArguments() {
-      return ImmutableList.of();
+      return factory.asTypeMirrors(type.targs());
     }
 
     @Override

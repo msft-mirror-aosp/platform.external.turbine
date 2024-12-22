@@ -19,7 +19,6 @@ package com.google.turbine.main;
 import static com.google.common.base.StandardSystemProperty.JAVA_CLASS_VERSION;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth8.assertThat;
 import static com.google.common.truth.extensions.proto.ProtoTruth.assertThat;
 import static com.google.turbine.testing.TestClassPaths.optionsWithBootclasspath;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -225,6 +224,11 @@ public class MainTest {
                   .toInstant())
           .isEqualTo(
               LocalDateTime.of(2010, 1, 1, 0, 0, 0).atZone(ZoneId.systemDefault()).toInstant());
+      // JarInputStream#getManifest only checks the first two entries for the manifest, so ensure
+      // that turbine writes jars with the manifest at the beginning
+      assertThat(jarFile.stream().limit(2).map(JarEntry::getName))
+          .containsExactly("META-INF/", "META-INF/MANIFEST.MF")
+          .inOrder();
     }
     try (JarFile jarFile = new JarFile(gensrcOutput.toFile())) {
       Manifest manifest = requireNonNull(jarFile.getManifest());
@@ -236,6 +240,9 @@ public class MainTest {
           .containsExactly(
               "Created-By", "bazel",
               "Manifest-Version", "1.0");
+      assertThat(jarFile.stream().limit(2).map(JarEntry::getName))
+          .containsExactly("META-INF/", "META-INF/MANIFEST.MF")
+          .inOrder();
     }
   }
 
