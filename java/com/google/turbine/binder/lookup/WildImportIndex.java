@@ -22,15 +22,13 @@ import com.google.common.collect.ImmutableList;
 import com.google.turbine.binder.sym.ClassSymbol;
 import com.google.turbine.tree.Tree;
 import com.google.turbine.tree.Tree.ImportDecl;
-import org.jspecify.nullness.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A scope that provides best-effort lookup for on-demand imported types in a compilation unit.
  *
  * <p>Resolution is lazy, imports are not evaluated until the first request for a matching simple
  * name.
- *
- * <p>Static on-demand imports of types are not supported.
  */
 public class WildImportIndex implements ImportScope {
 
@@ -160,9 +158,14 @@ public class WildImportIndex implements ImportScope {
         continue;
       }
       LookupResult result = scope.lookup(lookup, resolve);
-      if (result != null) {
-        return result;
+      if (result == null) {
+        continue;
       }
+      ClassSymbol sym = (ClassSymbol) result.sym();
+      if (!resolve.visible(sym)) {
+        continue;
+      }
+      return result;
     }
     return null;
   }

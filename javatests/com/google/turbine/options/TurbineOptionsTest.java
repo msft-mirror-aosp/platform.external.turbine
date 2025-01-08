@@ -17,7 +17,6 @@
 package com.google.turbine.options;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth8.assertThat;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
@@ -193,7 +192,15 @@ public class TurbineOptionsTest {
   public void paramsFile() throws Exception {
     Iterable<String> paramsArgs =
         Iterables.concat(
-            BASE_ARGS, Arrays.asList("--javacopts", "-source", "8", "-target", "8", "--"));
+            BASE_ARGS,
+            Arrays.asList(
+                "--javacopts",
+                "-source",
+                "8",
+                "-target",
+                "8",
+                "-Aconnector.opt=with,space, here",
+                "--"));
     Path params = tmpFolder.newFile("params.txt").toPath();
     Files.write(params, paramsArgs, StandardCharsets.UTF_8);
 
@@ -206,7 +213,9 @@ public class TurbineOptionsTest {
     TurbineOptions options = TurbineOptionsParser.parse(Arrays.asList(lines));
 
     // assert that options were read from params file
-    assertThat(options.javacOpts()).containsExactly("-source", "8", "-target", "8").inOrder();
+    assertThat(options.javacOpts())
+        .containsExactly("-source", "8", "-target", "8", "-Aconnector.opt=with,space, here")
+        .inOrder();
     // ... and directly from the command line
     assertThat(options.targetLabel()).hasValue("//custom/label");
   }
@@ -368,9 +377,18 @@ public class TurbineOptionsTest {
                     "ignored",
                     "--native_header_output",
                     "ignored",
-                    "--compress_jar")));
+                    "--compress_jar",
+                    "--post_processor",
+                    "jacoco",
+                    "paths-for-coverage.txt",
+                    "coverage-metadata",
+                    "-*Test",
+                    "-*TestCase",
+                    "--classpath",
+                    "lib.jar")));
     assertThat(options.outputDeps()).hasValue("output_deps.proto");
     assertThat(options.gensrcOutput()).hasValue("generated_sources.jar");
+    assertThat(options.classPath()).containsExactly("lib.jar");
   }
 
   @Test

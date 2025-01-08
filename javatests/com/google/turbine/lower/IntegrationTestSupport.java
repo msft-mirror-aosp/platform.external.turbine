@@ -70,6 +70,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import javax.annotation.processing.Processor;
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
@@ -127,11 +128,24 @@ public final class IntegrationTestSupport {
     for (ClassNode n : classes) {
       removeImplementation(n);
       removeUnusedInnerClassAttributes(infos, n);
-      makeEnumsFinal(all, n);
+      makeEnumsNonAbstract(all, n);
       sortAttributes(n);
       undeprecate(n);
+      removePreviewVersion(n);
     }
 
+    return toByteCode(classes);
+  }
+
+  public static Map<String, byte[]> removeUnsupportedAttributes(Map<String, byte[]> in) {
+    List<ClassNode> classes = toClassNodes(in);
+    for (ClassNode c : classes) {
+      c.nestMembers = null;
+      c.nestHostClass = null;
+      // TODO(b/307939333): class reading for sealed classes
+      c.permittedSubclasses = null;
+      // this is a synthetic access flag that ASM sets if recordComponents is present
+    }
     return toByteCode(classes);
   }
 
@@ -160,22 +174,25 @@ public final class IntegrationTestSupport {
         .forEach(f -> f.access &= ~Opcodes.ACC_DEPRECATED);
   }
 
+  // Mask out preview bits from version number
+  private static void removePreviewVersion(ClassNode n) {
+    n.version &= 0xffff;
+  }
+
   private static boolean isDeprecated(List<AnnotationNode> visibleAnnotations) {
     return visibleAnnotations != null
         && visibleAnnotations.stream().anyMatch(a -> a.desc.equals("Ljava/lang/Deprecated;"));
   }
 
-  private static void makeEnumsFinal(Set<String> all, ClassNode n) {
+  private static void makeEnumsNonAbstract(Set<String> all, ClassNode n) {
     n.innerClasses.forEach(
         x -> {
           if (all.contains(x.name) && (x.access & Opcodes.ACC_ENUM) == Opcodes.ACC_ENUM) {
             x.access &= ~Opcodes.ACC_ABSTRACT;
-            x.access |= Opcodes.ACC_FINAL;
           }
         });
     if ((n.access & Opcodes.ACC_ENUM) == Opcodes.ACC_ENUM) {
       n.access &= ~Opcodes.ACC_ABSTRACT;
-      n.access |= Opcodes.ACC_FINAL;
     }
   }
 
@@ -536,7 +553,19 @@ public final class IntegrationTestSupport {
       throws Exception {
     FileSystem fs = Jimfs.newFileSystem(Configuration.unix());
     Path out = fs.getPath("out");
-    return setupJavac(sources, classpath, options, collector, fs, out);
+    return setupJavac(sources, classpath, options, collector, fs, out, ImmutableList.of());
+  }
+
+  public static JavacTask runJavacAnalysis(
+      Map<String, String> sources,
+      Collection<Path> classpath,
+      ImmutableList<String> options,
+      DiagnosticCollector<JavaFileObject> collector,
+      ImmutableList<Processor> processors)
+      throws Exception {
+    FileSystem fs = Jimfs.newFileSystem(Configuration.unix());
+    Path out = fs.getPath("out");
+    return setupJavac(sources, classpath, options, collector, fs, out, processors);
   }
 
   public static Map<String, byte[]> runJavac(
@@ -553,7 +582,8 @@ public final class IntegrationTestSupport {
     FileSystem fs = Jimfs.newFileSystem(Configuration.unix());
     Path out = fs.getPath("out");
 
-    JavacTask task = setupJavac(sources, classpath, options, collector, fs, out);
+    JavacTask task =
+        setupJavac(sources, classpath, options, collector, fs, out, ImmutableList.of());
 
     if (!task.call()) {
       fail(collector.getDiagnostics().stream().map(d -> d.toString()).collect(joining("\n")));
@@ -586,7 +616,8 @@ public final class IntegrationTestSupport {
       ImmutableList<String> options,
       DiagnosticCollector<JavaFileObject> collector,
       FileSystem fs,
-      Path out)
+      Path out,
+      Iterable<? extends Processor> processors)
       throws IOException {
     Path srcs = fs.getPath("srcs");
 
@@ -616,13 +647,16 @@ public final class IntegrationTestSupport {
           StandardLocation.locationFor("MODULE_SOURCE_PATH"), ImmutableList.of(srcs));
     }
 
-    return compiler.getTask(
-        new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.err, UTF_8)), true),
-        fileManager,
-        collector,
-        options,
-        ImmutableList.of(),
-        fileManager.getJavaFileObjectsFromPaths(inputs));
+    JavacTask task =
+        compiler.getTask(
+            new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.err, UTF_8)), true),
+            fileManager,
+            collector,
+            options,
+            ImmutableList.of(),
+            fileManager.getJavaFileObjectsFromPaths(inputs));
+    task.setProcessors(processors);
+    return task;
   }
 
   /** Normalizes and stringifies a collection of class files. */
@@ -691,10 +725,6 @@ public final class IntegrationTestSupport {
       lines.clear();
       return new TestInput(sources, classes);
     }
-  }
-
-  public static int getMajor() {
-    return Runtime.version().feature();
   }
 
   private IntegrationTestSupport() {}

@@ -17,19 +17,24 @@
 package com.google.turbine.lower;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.TruthJUnit.assume;
 import static com.google.turbine.testing.TestResources.getResource;
+import static java.util.Map.entry;
 import static java.util.stream.Collectors.toList;
-import static org.junit.Assume.assumeTrue;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
+import com.google.turbine.bytecode.ClassFile;
+import com.google.turbine.bytecode.ClassReader;
+import com.google.turbine.bytecode.ClassWriter;
 import java.io.IOError;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.jar.JarEntry;
@@ -41,23 +46,34 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
+/**
+ * A test that compiles inputs with both javac and turbine, and asserts that the output is
+ * equivalent.
+ */
 @RunWith(Parameterized.class)
 public class LowerIntegrationTest {
 
   private static final ImmutableMap<String, Integer> SOURCE_VERSION =
-      ImmutableMap.of(
-          "record.test", 16, //
-          "record2.test", 16,
-          "record_tostring.test", 16,
-          "record_ctor.test", 16,
-          "sealed.test", 17,
-          "sealed_nested.test", 17,
-          "textblock.test", 15);
+      ImmutableMap.ofEntries(
+          entry("record.test", 16),
+          entry("record2.test", 16),
+          entry("record_tostring.test", 16),
+          entry("record_ctor.test", 16),
+          entry("record_getter_override.test", 16),
+          entry("sealed.test", 17),
+          entry("sealed_nested.test", 17),
+          entry("textblock.test", 15),
+          entry("textblock2.test", 15),
+          entry("B306423115.test", 15),
+          entry("permits.test", 17));
+
+  private static final ImmutableSet<String> SOURCE_VERSION_PREVIEW = ImmutableSet.of();
 
   @Parameters(name = "{index}: {0}")
   public static Iterable<Object[]> parameters() {
     String[] testCases = {
       // keep-sorted start
+      "B306423115.test",
       "B33513475.test",
       "B33513475b.test",
       "B33513475c.test",
@@ -258,6 +274,7 @@ public class LowerIntegrationTest {
       "packagedecl.test",
       "packageprivateprotectedinner.test",
       "param_bound.test",
+      "permits.test",
       "prim_class.test",
       "private_member.test",
       "privateinner.test",
@@ -273,6 +290,7 @@ public class LowerIntegrationTest {
       "record.test",
       "record2.test",
       "record_ctor.test",
+      "record_getter_override.test",
       "record_tostring.test",
       "rek.test",
       "samepkg.test",
@@ -286,6 +304,8 @@ public class LowerIntegrationTest {
       "simplemethod.test",
       "source_anno_retention.test",
       "source_bootclasspath_order.test",
+      "star_import_visibility.test",
+      "star_import_visibility_nested.test",
       "static_final_boxed.test",
       "static_member_type_import.test",
       "static_member_type_import_recursive.test",
@@ -297,6 +317,7 @@ public class LowerIntegrationTest {
       "supplierfunction.test",
       "tbound.test",
       "textblock.test",
+      "textblock2.test",
       "tyanno_inner.test",
       "tyanno_varargs.test",
       "typaram.test",
@@ -310,6 +331,9 @@ public class LowerIntegrationTest {
       "type_anno_c_array.test",
       "type_anno_cstyle_array_dims.test",
       "type_anno_hello.test",
+      "type_anno_nested.test",
+      "type_anno_nested_generic.test",
+      "type_anno_nested_raw.test",
       "type_anno_order.test",
       "type_anno_parameter_index.test",
       "type_anno_qual.test",
@@ -341,6 +365,7 @@ public class LowerIntegrationTest {
     };
     ImmutableSet<String> cases = ImmutableSet.copyOf(testCases);
     assertThat(cases).containsAtLeastElementsIn(SOURCE_VERSION.keySet());
+    assertThat(cases).containsAtLeastElementsIn(SOURCE_VERSION_PREVIEW);
     List<Object[]> tests = cases.stream().map(x -> new Object[] {x}).collect(toList());
     String testShardIndex = System.getenv("TEST_SHARD_INDEX");
     String testTotalShards = System.getenv("TEST_TOTAL_SHARDS");
@@ -388,15 +413,19 @@ public class LowerIntegrationTest {
       classpathJar = ImmutableList.of(lib);
     }
 
-    int version = SOURCE_VERSION.getOrDefault(test, 8);
-    assumeTrue(version <= Runtime.version().feature());
-    ImmutableList<String> javacopts =
-        ImmutableList.of(
-            "-source",
-            String.valueOf(version),
-            "-target",
-            String.valueOf(version),
-            "-Xpkginfo:always");
+    int actualVersion = Runtime.version().feature();
+    int requiredVersion = SOURCE_VERSION.getOrDefault(test, 8);
+    assume().that(actualVersion).isAtLeast(requiredVersion);
+    ImmutableList.Builder<String> javacoptsBuilder = ImmutableList.builder();
+    if (SOURCE_VERSION_PREVIEW.contains(test)) {
+      requiredVersion = actualVersion;
+      javacoptsBuilder.add("--enable-preview");
+    }
+    javacoptsBuilder.add(
+        "-source", String.valueOf(requiredVersion), "-target", String.valueOf(requiredVersion));
+    javacoptsBuilder.add("-Xpkginfo:always");
+
+    ImmutableList<String> javacopts = javacoptsBuilder.build();
 
     Map<String, byte[]> expected =
         IntegrationTestSupport.runJavac(input.sources, classpathJar, javacopts);
@@ -406,5 +435,17 @@ public class LowerIntegrationTest {
 
     assertThat(IntegrationTestSupport.dump(IntegrationTestSupport.sortMembers(actual)))
         .isEqualTo(IntegrationTestSupport.dump(IntegrationTestSupport.canonicalize(expected)));
+
+    Map<String, byte[]> bytecode = new LinkedHashMap<>();
+    actual.forEach(
+        (name, bytes) -> {
+          ClassFile classFile = ClassReader.read(name, bytes);
+          bytecode.put(name, ClassWriter.writeClass(classFile));
+        });
+
+    assertThat(IntegrationTestSupport.dump(bytecode))
+        .isEqualTo(
+            IntegrationTestSupport.dump(
+                IntegrationTestSupport.removeUnsupportedAttributes(actual)));
   }
 }
