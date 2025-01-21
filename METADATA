@@ -7,14 +7,14 @@ description: "Turbine is a header compiler for Java."
 third_party {
   license_type: NOTICE
   last_upgrade_date {
-    year: 2024
-    month: 12
-    day: 13
+    year: 2025
+    month: 1
+    day: 18
   }
   homepage: "https://github.com/google/turbine"
   identifier {
     type: "Git"
     value: "https://github.com/google/turbine"
-    version: "706588c0ea176427c1561a2d3ea1f642270c6b92"
+    version: "5d422e5bc6ff4928223ea049856d27590661db04"
   }
 }
