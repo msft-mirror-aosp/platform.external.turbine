@@ -238,6 +238,7 @@ class AbstractTurbineTypesTest {
     // type annotations
     List<String> annotatedTypes = new ArrayList<>();
     annotatedTypes.add("@A int @B []");
+    annotatedTypes.add("@A int");
     // The string representation of these types changed in JDK 19, see JDK-8281238
     if (Runtime.version().feature() >= 19) {
       annotatedTypes.add("@A List<@B Integer>");
@@ -462,6 +463,9 @@ class AbstractTurbineTypesTest {
 
   /**
    * Discover all types contained in the given element, keyed by their immediate enclosing element.
+   *
+   * <p>This method is executed for both javac and Turbine and is expected to produce the same
+   * results in each case.
    */
   private static void getTypes(
       Types typeUtils, Element element, Multimap<String, TypeMirror> types) {
@@ -508,6 +512,7 @@ class AbstractTurbineTypesTest {
                       if (t.getUpperBound() != null) {
                         types.put(key(e), t.getUpperBound());
                       }
+                      types.put(String.format("getLowerBound(%s)", key(e)), t.getLowerBound());
                       return null;
                     }
                   },
