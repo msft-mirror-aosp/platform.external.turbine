@@ -110,6 +110,9 @@ public class TurbineTypes implements Types {
   }
 
   private boolean isSameType(Type a, Type b) {
+    if (b.tyKind() == TyKind.ERROR_TY) {
+      return true;
+    }
     switch (a.tyKind()) {
       case PRIM_TY:
         return b.tyKind() == TyKind.PRIM_TY && ((PrimTy) a).primkind() == ((PrimTy) b).primkind();
@@ -132,7 +135,7 @@ public class TurbineTypes implements Types {
       case METHOD_TY:
         return b.tyKind() == TyKind.METHOD_TY && isSameMethodType((MethodTy) a, (MethodTy) b);
       case ERROR_TY:
-        return false;
+        return true;
     }
     throw new AssertionError(a.tyKind());
   }
@@ -328,6 +331,9 @@ public class TurbineTypes implements Types {
    *     conversions.
    */
   private boolean isSubtype(Type a, Type b, boolean strict) {
+    if (a.tyKind() == TyKind.ERROR_TY || b.tyKind() == TyKind.ERROR_TY) {
+      return true;
+    }
     if (b.tyKind() == TyKind.INTERSECTION_TY) {
       for (Type bound : getBounds((IntersectionTy) b)) {
         // TODO(cushon): javac rejects e.g. `|List| isAssignable Serializable&ArrayList<?>`,
@@ -413,7 +419,8 @@ public class TurbineTypes implements Types {
   // https://docs.oracle.com/javase/specs/jls/se11/html/jls-4.html#jls-4.10.1
   private static boolean isPrimSubtype(PrimTy a, Type other) {
     if (other.tyKind() != TyKind.PRIM_TY) {
-      return false;
+      // The null reference can always be assigned or cast to any reference type, see JLS 4.1
+      return a.primkind() == TurbineConstantTypeKind.NULL && isReferenceType(other);
     }
     PrimTy b = (PrimTy) other;
     switch (a.primkind()) {
@@ -483,7 +490,7 @@ public class TurbineTypes implements Types {
       case BOOLEAN:
         return a.primkind() == b.primkind();
       case NULL:
-        break;
+        return isReferenceType(other);
     }
     throw new AssertionError(a.primkind());
   }
@@ -670,10 +677,17 @@ public class TurbineTypes implements Types {
   }
 
   private boolean isAssignable(Type t1, Type t2) {
+    if (t1.tyKind() == TyKind.ERROR_TY || t2.tyKind() == TyKind.ERROR_TY) {
+      return true;
+    }
     switch (t1.tyKind()) {
       case PRIM_TY:
+        TurbineConstantTypeKind primkind = ((PrimTy) t1).primkind();
+        if (primkind == TurbineConstantTypeKind.NULL) {
+          return isReferenceType(t2);
+        }
         if (t2.tyKind() == TyKind.CLASS_TY) {
-          ClassSymbol boxed = boxedClass(((PrimTy) t1).primkind());
+          ClassSymbol boxed = boxedClass(primkind);
           t1 = ClassTy.asNonParametricClassTy(boxed);
         }
         break;
@@ -700,6 +714,14 @@ public class TurbineTypes implements Types {
     return type.tyKind() == TyKind.CLASS_TY && ((ClassTy) type).sym().equals(ClassSymbol.OBJECT);
   }
 
+  private static boolean isReferenceType(Type type) {
+    return switch (type.tyKind()) {
+      case CLASS_TY, ARRAY_TY, TY_VAR, WILD_TY, INTERSECTION_TY, ERROR_TY -> true;
+      case PRIM_TY -> ((PrimTy) type).primkind() == TurbineConstantTypeKind.NULL;
+      case NONE_TY, METHOD_TY, VOID_TY -> false;
+    };
+  }
+
   @Override
   public boolean contains(TypeMirror a, TypeMirror b) {
     return contains(asTurbineType(a), asTurbineType(b), /* strict= */ true);
@@ -712,6 +734,9 @@ public class TurbineTypes implements Types {
   // See JLS 4.5.1, 'type containment'
   // https://docs.oracle.com/javase/specs/jls/se11/html/jls-4.html#jls-4.5.1
   private boolean containedBy(Type t1, Type t2, boolean strict) {
+    if (t1.tyKind() == TyKind.ERROR_TY) {
+      return true;
+    }
     if (t1.tyKind() == TyKind.WILD_TY) {
       WildTy w1 = (WildTy) t1;
       Type t;
@@ -877,7 +902,10 @@ public class TurbineTypes implements Types {
       builder.add(ClassTy.OBJECT);
     }
     for (Type interfaceType : info.interfaceTypes()) {
-      builder.add(raw ? erasure(interfaceType) : subst(interfaceType, mapping));
+      // ErrorTypes are not included in directSupertypes for compatibility with javac
+      if (interfaceType.tyKind() == TyKind.CLASS_TY) {
+        builder.add(raw ? erasure(interfaceType) : subst(interfaceType, mapping));
+      }
     }
     return builder.build();
   }
